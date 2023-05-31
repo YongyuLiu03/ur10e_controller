@@ -10,14 +10,18 @@ from scipy.spatial.transform import Rotation as R
 
 
 def compute_quaternion(eef_pose: Pose):
-    z = tf.unit_vector([target_point.x-eef_pose.position.x, target_point.y-eef_pose.position.y, target_point.z-eef_pose.position.z])
-    y = np.array([0, 1, 0]) if abs(np.dot(z, [0, 1, 0])) != 1 else np.array([0, 0, 1])
-    x = tf.unit_vector(np.cross(y, z))
+    x = tf.unit_vector([target_point.x-eef_pose.position.x, target_point.y-eef_pose.position.y, target_point.z-eef_pose.position.z])
+    z = np.array([0, 0, 1]) if not np.allclose(x, np.array([0, 0, 1])) else np.array([0, 1, 0])
     y = tf.unit_vector(np.cross(z, x))
+    z = tf.unit_vector(np.cross(x, y))
+    print(target_point)
+    print(eef_pose.position)
+    print(x)
 
     rotation_matrix = np.array([x, y, z]).transpose()
     r = R.from_matrix(rotation_matrix)
     quaternion = r.as_quat()
+    print(R.from_quat(quaternion).as_matrix())
     return quaternion
 
 def compute_point(x1, y1):
@@ -73,20 +77,19 @@ def main():
         move_group.clear_pose_targets()
 
         print(f"{'executed' if success else 'failed'}")
-        print("current pose:\n", move_group.get_current_pose().pose)
+        # print("current pose:\n", move_group.get_current_pose().pose)
         if not success:
-            rospy.signal_shutdown("")
-            exit()
+            return
     
-    rospy.signal_shutdown("")
 
 target_point = Point()
-target_point.x = 0.6
-target_point.y = 0.6
-target_point.z = 0.1
+target_point.x = 0.5
+target_point.y = 0.5
+target_point.z = 0.0
 n = 16
 chomp = False
 theta = 2*math.pi/n
 
 if __name__ == '__main__':
     main()
+    rospy.signal_shutdown("")
