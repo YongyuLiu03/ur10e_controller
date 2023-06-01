@@ -14,14 +14,10 @@ def compute_quaternion(eef_pose: Pose):
     z = np.array([0, 0, 1]) if not np.allclose(x, np.array([0, 0, 1])) else np.array([0, 1, 0])
     y = tf.unit_vector(np.cross(z, x))
     z = tf.unit_vector(np.cross(x, y))
-    print(target_point)
-    print(eef_pose.position)
-    print(x)
 
     rotation_matrix = np.array([x, y, z]).transpose()
     r = R.from_matrix(rotation_matrix)
     quaternion = r.as_quat()
-    print(R.from_quat(quaternion).as_matrix())
     return quaternion
 
 def compute_point(x1, y1):
@@ -35,7 +31,7 @@ def compute_point(x1, y1):
 
 def main():
     moveit_commander.roscpp_initialize(sys.argv)
-    rospy.init_node("rotate_planner")
+    rospy.init_node("rotate_motion")
 
     robot = moveit_commander.RobotCommander()
     scene = moveit_commander.PlanningSceneInterface()
@@ -74,6 +70,7 @@ def main():
             success = move_group.go(joint_goals, wait=True)
         else: 
             success = move_group.go(wait=True)
+        move_group.stop()
         move_group.clear_pose_targets()
 
         print(f"{'executed' if success else 'failed'}")

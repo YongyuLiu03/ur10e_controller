@@ -90,7 +90,7 @@
     <model name='unit_box'>
       <link name='link_0'>
         <inertial>
-          <mass>10</mass>
+          <mass>10000</mass>
           <inertia>
             <ixx>1.667e-05</ixx>
             <ixy>0</ixy>
