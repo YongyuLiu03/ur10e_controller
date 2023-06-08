@@ -7,6 +7,7 @@ import sys
 import math
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from moveit_msgs.msg import JointConstraint, Constraints
 
 
 def compute_quaternion(eef_pose: Pose):
@@ -41,12 +42,56 @@ def main():
     eef_link = move_group.get_end_effector_link()
     print("eef link: ", eef_link)
 
+    move_group.clear_path_constraints()
+    # w1_jc = JointConstraint()
+    # w1_jc.joint_name = "wrist_1_joint"
+    # w1_jc.position = -math.pi/2.0
+    # w1_jc.tolerance_above = math.pi/2.0
+    # w1_jc.tolerance_below = math.pi/2.0
+    # w1_jc.weight = 1.0
+    # sl_jc = JointConstraint()
+    # sl_jc.joint_name = "shoulder_lift_joint"
+    # sl_jc.position = 0
+    # sl_jc.tolerance_above = 0
+    # sl_jc.tolerance_below = math.pi/2.0
+    # sl_jc.weight = 1.0
+
+    # constraints = Constraints()
+    # constraints.joint_constraints.append(w1_jc)
+    # constraints.joint_constraints.append(sl_jc)
+    # move_group.set_path_constraints(constraints)
+
+
+    # joint_goal = move_group.get_current_joint_values()
+    # print("Current joint goals: ", joint_goal[3])
+    # joint_goal[0] = 0
+    # joint_goal[1] = -math.pi/2.0
+    # joint_goal[2] = math.pi/2.0
+    # joint_goal[3] = -math.pi/2.0
+    # joint_goal[4] = 0
+    # joint_goal[5] = 0
+    # move_group.go(joint_goal, wait=True)
+    # move_group.stop()
+    # input("ENTER to continue")
+    # joint_goal = move_group.get_current_joint_values()
+    # print("Current joint goals: ", joint_goal[3])
+    # joint_goal[0] = -math.pi
+    # move_group.go(joint_goal, wait=True)
+    # move_group.stop()
+    # input("ENTER to continue")
+    # print("Current joint goals: ", joint_goal[3])
+    # joint_goal[0] = math.pi
+    # move_group.go(joint_goal, wait=True)
+    # move_group.stop()
+    # input("ENTER to continue")
+
+
     for i in range(n+1):
         eef_pose = Pose()
         if i == 0:
             eef_pose.position.x = target_point.x - 0.2
             eef_pose.position.y = target_point.y - 0.2
-            eef_pose.position.z = target_point.z + 0.2
+            eef_pose.position.z = target_point.z 
         else: 
             eef_pose = move_group.get_current_pose().pose
             x, y = compute_point(eef_pose.position.x, eef_pose.position.y)
@@ -59,17 +104,20 @@ def main():
         eef_pose.orientation.w = quaternion[3]
 
         move_group.set_pose_target(eef_pose)
-        joint_goals = move_group.get_joint_value_target()
+
 
         if i == 0:
             print('Initializing eef pose')
         else:
             print(f"Rotate step {i}")
 
-        if chomp:
-            success = move_group.go(joint_goals, wait=True)
-        else: 
-            success = move_group.go(wait=True)
+        execute = False
+        while not execute:
+            plan = move_group.plan()
+            execute = "e" == input("e to excecte / other to replan ")
+            
+
+        success = move_group.go(plan[0], wait=True)
         move_group.stop()
         move_group.clear_pose_targets()
 
@@ -80,11 +128,10 @@ def main():
     
 
 target_point = Point()
-target_point.x = 0.5
-target_point.y = 0.5
+target_point.x = 0.6
+target_point.y = 0.3
 target_point.z = 0.0
 n = 16
-chomp = False
 theta = 2*math.pi/n
 
 if __name__ == '__main__':

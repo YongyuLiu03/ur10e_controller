@@ -48,12 +48,19 @@ def main():
 
         move_group.set_pose_target(pose_goal)
 
-        success = move_group.go(wait=True)
+        plan = move_group.plan()
+
+        execute = "e" == input("e to excecte / other to discard ")
+
+        if not execute:
+            continue
+
+        success = move_group.go(plan[0], wait=True)
 
         move_group.stop()
         
         move_group.clear_pose_targets()
-
+        
         print(f"Execute Result: {'Executed' if success else 'Failed'}")
         print("current_pose: ", move_group.get_current_pose().pose)
 
