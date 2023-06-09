@@ -42,7 +42,7 @@ def wait_until_stop(group):
 
 def main():
     moveit_commander.roscpp_initialize(sys.argv)
-    rospy.init_node("square_motion")
+    rospy.init_node("2square_motion")
 
     robot = moveit_commander.RobotCommander()
     group_names = robot.get_group_names()
