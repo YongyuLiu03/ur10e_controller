@@ -4,6 +4,8 @@ import moveit_commander
 import moveit_msgs.msg
 import geometry_msgs.msg
 import sys
+from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 def main():
     moveit_commander.roscpp_initialize(sys.argv)
@@ -63,6 +65,16 @@ def main():
         
         print(f"Execute Result: {'Executed' if success else 'Failed'}")
         print("current_pose: ", move_group.get_current_pose().pose)
+        printer_pose = move_group.get_current_pose().pose
+        camera_pose = geometry_msgs.msg.Pose()
+        camera_pose.position.z = printer_pose.position.z
+        camera_pose.position.x = printer_pose.position.x + 0.25
+        camera_pose.position.y = printer_pose.position.y - 0.05
+        printer_r = R.from_quat([printer_pose.orientation.x, printer_pose.orientation.y, printer_pose.orientation.z, printer_pose.orientation.w])
+        printer_mat = printer_r.as_matrix()
+        rpy_mat = R.from_euler('xyz', np.array([0, 0, -np.pi/4])).as_matrix()
+        camera_quat = R.from_matrix(np.matmul(rpy_mat, printer_mat)).as_quat()
+        print("camera: ", camera_pose, camera_quat)
 
 
 if __name__ == "__main__":
