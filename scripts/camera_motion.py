@@ -75,7 +75,7 @@ def main():
     init_r = R.from_rotvec(np.radians(0)*np.array([0, 0, 1]))
     cur_r = init_r
     cur_pose = init_pose
-    cur_pose.position.x -= 0.5*length
+    # cur_pose.position.x -= 0.5*length
     cur_pose.position.y += 0.5*length
 
     plan_and_execute(cur_pose)
@@ -88,17 +88,17 @@ def main():
         cur_quat = cur_r.as_quat()
         
         if i == 0:
-            cur_pose.position.y -= length
-            cur_pose.position.x += length
+            cur_pose.position.y -= 0.5*length
+            cur_pose.position.x += 0.5*length
         elif i == 1:
-            cur_pose.position.y += length
-            cur_pose.position.x += length
+            cur_pose.position.y += 0.5*length
+            cur_pose.position.x += 0.5*length
         elif i == 2:
-            cur_pose.position.x -= length
-            cur_pose.position.y += length
+            cur_pose.position.x -= 0.5*length
+            cur_pose.position.y += 0.5*length
         elif i == 3:
-            cur_pose.position.x -= length
-            cur_pose.position.y -= length
+            cur_pose.position.x -= 0.5*length
+            cur_pose.position.y -= 0.5*length
 
         cur_pose.orientation.x = cur_quat[0]
         cur_pose.orientation.y = cur_quat[1]
