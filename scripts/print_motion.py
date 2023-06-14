@@ -16,16 +16,19 @@ import copy
 def plan_and_execute_cartesian(waypoints):
     execute = False
     fraction = 0
-    while not execute:
-        while fraction < 0.95:
-            (plan, fraction) = move_group.compute_cartesian_path(waypoints, 0.005, 0.0)
-            print(fraction)
-        execute = "e" == input("e to excecte / other to replan ")
+    # while not execute:
+    while fraction < 0.95:
+        (plan, fraction) = move_group.compute_cartesian_path(waypoints, 0.005, 0.0)
+        print(fraction)
+        # execute = "e" == input("e to excecte / other to replan ")
     success = move_group.execute(plan, wait=True)
-    retry = True
-    while not success and retry:
-        retry = "e" == input("e to retry / other to skip ")
-        success = move_group.execute(plan, wait=True)
+    wait_until_stop()
+    # retry = True
+    # while not success and retry:
+    #     # retry = "e" == input("e to retry / other to skip ")
+    #     success = move_group.execute(plan, wait=True)
+    #     wait_until_stop()
+        
     return 
 
 class Monitor:
