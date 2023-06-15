@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rospy
 import moveit_commander
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped, TransformStamped
 from moveit_msgs.msg import DisplayTrajectory, JointConstraint, Constraints
 import tf.transformations as tf
 import sys
@@ -14,20 +14,14 @@ import tf2_ros
 
 
 def plan_and_execute(target_pose):
-    execute = False
-    while not execute:
-        move_group.set_pose_target(target_pose)
-        plan = move_group.plan()
-        execute = "e" == input("e to excecte / other to replan ")
+    move_group.set_pose_target(target_pose)
     success = move_group.go(wait=True)
-    retry = True
-    while not success and retry:
-        retry = "e" == input("e to retry / other to skip ")
-        success = move_group.go(wait=True)
     move_group.clear_pose_targets()
+    if not success:
+        exit()
     return 
 
-def get_camera_pose(): 
+def get_transform(): 
     transform = None
     rate = rospy.Rate(10.0)
     while not transform:
@@ -36,17 +30,13 @@ def get_camera_pose():
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             rate.sleep()
             continue
-    camera_pose = PoseStamped()
-    camera_pose.header.stamp = rospy.Time.now()
-    camera_pose.header.frame_id = "base_link"
-    camera_pose.pose.position = transform.transform.translation
-    camera_pose.pose.orientation = transform.transform.rotation
-    return camera_pose
+
+    return transform
 
 def main():
     moveit_commander.roscpp_initialize(sys.argv)
     rospy.init_node("camera_motion")
-    pub = rospy.Publisher("camera_pose", PoseStamped, queue_size=10)
+    pub = rospy.Publisher("transformation", TransformStamped, queue_size=10)
 
     global move_group
     global tfBuffer
@@ -66,10 +56,10 @@ def main():
     
     init_pose = Pose()
     init_pose.position.x = float(0.5)
-    init_pose.position.y = float(-0.1)
-    init_pose.position.z = float(0.05)
-    length = 0.1
-    rate = rospy.Rate(60)
+    init_pose.position.y = float(0)
+    init_pose.position.z = float(0)
+    length = 0.06
+    rate = rospy.Rate(120)
 
     rot_z_90 = R.from_rotvec(np.radians(90)*np.array([0, 0, 1]))
     init_r = R.from_rotvec(np.radians(0)*np.array([0, 0, 1]))
@@ -79,7 +69,7 @@ def main():
     cur_pose.position.y += 0.5*length
 
     plan_and_execute(cur_pose)
-    pub.publish(get_camera_pose())
+    pub.publish(get_transform())
     rate.sleep()
 
     for i in range(4):
@@ -106,7 +96,7 @@ def main():
         cur_pose.orientation.w = cur_quat[3]
         
         plan_and_execute(cur_pose)
-        pub.publish(get_camera_pose())
+        pub.publish(get_transform())
         rate.sleep()
 
 
