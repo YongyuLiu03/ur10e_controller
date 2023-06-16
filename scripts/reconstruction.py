@@ -9,6 +9,7 @@ import cv2
 import copy
 from scipy.spatial.transform import Rotation as R
 
+pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
@@ -21,6 +22,7 @@ pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
 pinhole_camera_intrinsic.set_intrinsics(
     intrinsics.width, intrinsics.height, intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy
 )
+o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/camera_intrinsics.json"), pinhole_camera_intrinsic)
 volume = o3d.pipelines.integration.ScalableTSDFVolume(
     voxel_length=4.0/512.0,
     sdf_trunc=0.04,
@@ -29,9 +31,14 @@ volume = o3d.pipelines.integration.ScalableTSDFVolume(
 align_to = rs.stream.color
 align = rs.align(align_to)
 
+print(depth_scale)
+
 transforms = []
 frames = []
 count = 0
+
+clip_distance_in_meters = 0.4
+clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
 
 def capture_pcd_cb(transformation):
 
@@ -40,57 +47,24 @@ def capture_pcd_cb(transformation):
     print(transformation.transform)
 
     q = transformation.transform.rotation
-    r = R.from_quat([q.x, q.z, q.y, q.w])
+    r = R.from_quat([q.x, q.y, q.z, q.w])
     matrix = r.as_matrix()
     t = transformation.transform.translation
-    translation = np.array([t.x, t.z, t.y])
+    translation = np.array([t.x, t.y, t.z])
     T = np.eye(4)
     T[:3, :3] = matrix
     T[:3, 3] = translation
 
-    print("euler: ", r.as_euler("xyz", degrees=True))
+    print("euler: ", r.as_euler("yzx", degrees=True))
 
     transforms.append(T)
-
     frame = align.process(pipeline.wait_for_frames())
-    
     frames.append(frame)
 
     count += 1
-    if count == 4:
+    if count == 8:
         rospy.signal_shutdown("PCD collection completed")
-    
     return 
-
-
-    aligned_depth_frame = aligned_frames.get_depth_frame()
-    color_frame = aligned_frames.get_color_frame()
-    color_image = np.asanyarray(color_frame.get_data())
-    depth_image = np.asanyarray(aligned_depth_frame.get_data())
-
-    clip_distance_in_meters = 0.3 
-    clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
-    depth_image[depth_image > ctransformationlip_distance_in_depth_units] = 0
-
-    color_image = cv2.normalize(color_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    color_image = color_image.astype(np.uint8)
-    depth_o3d = o3d.geometry.Image(depth_image)
-    color_o3d = o3d.geometry.Image(color_image)
-
-
-    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
-    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
-        rgbd_image, pinhole_camera_intrinsic
-    )
-
-    pcd.points = o3d.utility.Vector3dVector(np.asarray(pcd.points) * depth_scale)
-
-    volume.integrate(rgbd_image, pinhole_camera_intrinsic, np.linalg.inv(T))
-
-    volume.integrate(pcd, pinhole_camera_intrinsic, np.linalg.inv(T))
-
-
-    o3d.io.write_point_cloud(os.path.join(os.path.dirname(os.path.realpath(__file__)), f"../pcd/pcd{count}.ply"), pcd)
 
 def main():
     rospy.init_node("reconstruction")
@@ -98,17 +72,11 @@ def main():
     rospy.spin()
     pipeline.stop()
 
-    # mesh = volume.extract_triangle_mesh()
-    # o3d.visualization.draw_geometries([mesh])
-    # o3d.io.write_triangle_mesh(os.path.join(os.path.dirname(os.path.realpath(__file__)), f"../pcd/mesh.ply"), mesh)
-    # o3d.io.write_voxel_grid(os.path.join(os.path.dirname(os.path.realpath(__file__)), f"../pcd/mesh.ply"), volume)
-
-
     reverse = np.array([
-        [1, 0, 0, 0],  # No change along x
-        [0, -1, 0, 0],  # Invert y
-        [0, 0, -1, 0],  # Invert z
-        [0, 0, 0, 1],  # No change
+        [1, 0, 0, 0], 
+        [0, -1, 0, 0],
+        [0, 0, -1, 0],
+        [0, 0, 0, 1]
     ])
     
     combined_pcd = o3d.geometry.PointCloud()
@@ -116,28 +84,30 @@ def main():
     mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
     meshes = [mesh]
 
-    for i in range(len(frames)):
+    for i in range(0, len(frames)):
         frame = frames[i]
         T = transforms[i]
         depth_frame = frame.get_depth_frame()
         color_frame = frame.get_color_frame()
         depth_image = np.asanyarray(depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
+
+        depth_image[depth_image > clip_distance_in_depth_units] = 0
         # print("depth_image:", depth_image, "color_image: ", color_image)
         depth_o3d = o3d.geometry.Image(depth_image)
         color_o3d = o3d.geometry.Image(color_image)
         rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
-        pcd.transform(np.linalg.inv(T))
-        pcd.transform(reverse)
-        combined_pcd += pcd
-        mesh_t = copy.deepcopy(mesh).transform(np.linalg.inv(T)).transform(reverse)
+        pcd_t = copy.deepcopy(pcd).translate(T[:3, 3]).rotate(T[:3, :3])
+        combined_pcd += pcd_t
+        mesh_t = copy.deepcopy(mesh).translate(T[:3, 3]).rotate(T[:3, :3])
         meshes.append(mesh_t)
-        # o3d.visualization.draw_geometries([pcd, mesh_t])
-        
-        # o3d.visualization.draw_geometries([mesh, mesh_t])
-
+        # o3d.visualization.draw_geometries([pcd, pcd_t, mesh, mesh_t])
+        o3d.io.write_point_cloud(pcd_dir + f"pcd{i}.pcd", pcd)
+        o3d.io.write_point_cloud(pcd_dir + f"pcd_t{i}.pcd", pcd_t)
+    
     o3d.visualization.draw_geometries([combined_pcd, *meshes])
+    o3d.io.write_point_cloud(pcd_dir + "combine_pcd.pcd", combined_pcd)
 
 if __name__ == "__main__":
     main()

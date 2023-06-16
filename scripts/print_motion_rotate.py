@@ -26,7 +26,7 @@ def plan_and_execute_cartesian(waypoints, eef_step):
 
 def main():
     moveit_commander.roscpp_initialize(sys.argv)
-    rospy.init_node("print_motion")
+    rospy.init_node("print_motion_rotate")
 
     global move_group
 
@@ -158,15 +158,6 @@ def main():
 
         if i % 2 == 1 and i != layers-1:
             waypoints = []
-            # rot_r = rot_90_z_counter if cur_r == init_r else rot_90_z
-            # for j in range(2):
-            #     cur_r = rot_r * cur_r
-            #     cur_quat = cur_r.as_quat()
-            #     cur_pose.orientation.x = cur_quat[0]
-            #     cur_pose.orientation.y = cur_quat[1]
-            #     cur_pose.orientation.z = cur_quat[2]
-            #     cur_pose.orientation.w = cur_quat[3]
-            #     waypoints.append(copy.deepcopy(cur_pose))
             cur_r = rot_180_z * cur_r
             cur_quat = cur_r.as_quat()
             cur_pose.orientation.x = cur_quat[0]
