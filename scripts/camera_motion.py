@@ -26,7 +26,7 @@ def get_transform():
     rate = rospy.Rate(10.0)
     while not transform:
         try:
-            transform = tfBuffer.lookup_transform('base_link', 'camera_depth_optical_frame', rospy.Time())
+            transform = tfBuffer.lookup_transform('base_link', 'camera_color_optical_frame', rospy.Time())
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             rate.sleep()
             continue
@@ -57,7 +57,7 @@ def main():
     init_pose = Pose()
     init_pose.position.x = float(0.5)
     init_pose.position.y = float(0)
-    init_pose.position.z = float(0)
+    init_pose.position.z = float(0.05)
     length = 0.1
     rate = rospy.Rate(120)
 
@@ -65,7 +65,6 @@ def main():
     init_r = R.from_rotvec(np.radians(0)*np.array([0, 0, 1]))
     cur_r = init_r
     cur_pose = init_pose
-    # cur_pose.position.x -= 0.5*length
     cur_pose.position.y += 0.5*length
 
     plan_and_execute(cur_pose)
