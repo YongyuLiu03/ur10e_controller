@@ -11,8 +11,8 @@ from scipy.spatial.transform import Rotation as R
 pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
+config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
+config.enable_stream(rs.stream.color, 848, 480, rs.format.rgb8, 30)
 profile = pipeline.start(config)
 depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
 intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
@@ -26,7 +26,17 @@ o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspa
 align_to = rs.stream.color
 align = rs.align(align_to)
 
+
+depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
+color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
+extrinsics = depth_profile.get_extrinsics_to(color_profile)
+depth_to_color = np.eye(4)
+depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
+depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
+if depth_scale < 0.001:
+        depth_to_color[:3, 3] *= 10
 print(depth_scale)
+print(depth_to_color)
 
 transforms = []
 frames = []
@@ -45,6 +55,8 @@ def capture_pcd_cb(transformation):
     matrix = r.as_matrix()
     t = transformation.transform.translation
     translation = np.array([t.x, t.y, t.z])
+    if depth_scale < 0.001:
+        translation *= 10
     T = np.eye(4)
     T[:3, :3] = matrix
     T[:3, 3] = translation
@@ -54,6 +66,7 @@ def capture_pcd_cb(transformation):
     transforms.append(T)
     
     frame = align.process(pipeline.wait_for_frames())
+    # frame = pipeline.wait_for_frames()
     frames.append(frame)
 
     count += 1
@@ -72,7 +85,7 @@ def main():
     mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
     meshes = [mesh]
 
-    for i in range(0, len(frames), 2):
+    for i in range(0, len(frames)):
         frame = frames[i]
         T = transforms[i]
         depth_frame = frame.get_depth_frame()
@@ -84,7 +97,8 @@ def main():
         color_o3d = o3d.geometry.Image(color_image)
         rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
-        pcd_t = copy.deepcopy(pcd).transform(np.linalg.inv(T))
+        pcd_t = copy.deepcopy(pcd).transform(depth_to_color)
+        pcd_t.transform(T)
         combined_pcd += pcd_t
         mesh_t = copy.deepcopy(mesh).transform(T)
         meshes.append(mesh_t)
@@ -93,7 +107,7 @@ def main():
         # Assign the color to all points
         pcd_t.colors = o3d.utility.Vector3dVector([color for _ in range(len(pcd_t.points))])
 
-        o3d.visualization.draw_geometries([pcd_t, pcd, mesh, mesh_t])
+        # o3d.visualization.draw_geometries([pcd_t, pcd, mesh, mesh_t])
         # o3d.io.write_point_cloud(pcd_dir + f"pcd{i}.pcd", pcd)
         # o3d.io.write_point_cloud(pcd_dir + f"pcd_t{i}.pcd", pcd_t)
     

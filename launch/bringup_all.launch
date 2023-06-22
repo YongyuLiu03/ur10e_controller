@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+
     <include file="$(find ur_robot_driver)/launch/ur10e_bringup.launch" />
+    <include file="$(find ur10e_moveit_config)/launch/moveit_planning_execution.launch"/>
+    <include file="$(find ur10e_moveit_config)/launch/moveit_rviz.launch" />
     <include file="$(find easy_handeye)/launch/publish.launch">
         <arg name="eye_on_hand" value="true" />
         <arg name="namespace_prefix" value="ur10e_calib" />
     </include>
-    <include file="$(find ur10e_moveit_config)/launch/moveit_planning_execution.launch"/>
-    <include file="$(find ur10e_moveit_config)/launch/moveit_rviz.launch" />
-
 </launch>

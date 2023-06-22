@@ -28,7 +28,7 @@
 
         <!-- fill in the following parameters according to your robot's published tf frames -->
         <arg name="robot_base_frame" value="base_link"/>
-        <arg name="robot_effector_frame" value="flange"/>
+        <arg name="robot_effector_frame" value="printer_link"/>
 
         <!-- fill in the following parameters according to your tracking system's published tf frames -->
         <arg name="tracking_base_frame" value="camera_color_optical_frame"/>
