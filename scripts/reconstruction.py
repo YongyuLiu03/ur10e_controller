@@ -7,6 +7,8 @@ import open3d as o3d
 import os
 import copy
 from scipy.spatial.transform import Rotation as R
+import tf.transformations as tf
+import tf2_ros
 
 pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pipeline = rs.pipeline()
@@ -42,7 +44,7 @@ transforms = []
 frames = []
 count = 0
 
-clip_distance_in_meters = 0.4
+clip_distance_in_meters = 0.5
 clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
 
 def capture_pcd_cb(transformation):
@@ -66,7 +68,6 @@ def capture_pcd_cb(transformation):
     transforms.append(T)
     
     frame = align.process(pipeline.wait_for_frames())
-    # frame = pipeline.wait_for_frames()
     frames.append(frame)
 
     count += 1
@@ -76,6 +77,7 @@ def capture_pcd_cb(transformation):
 
 def main():
     rospy.init_node("reconstruction")
+
     sub = rospy.Subscriber("transformation", TransformStamped, capture_pcd_cb)
     rospy.spin()
     pipeline.stop()
@@ -97,21 +99,31 @@ def main():
         color_o3d = o3d.geometry.Image(color_image)
         rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
-        pcd_t = copy.deepcopy(pcd).transform(depth_to_color)
-        pcd_t.transform(T)
+        pcd_t = copy.deepcopy(pcd)
+        # pcd_t.rotate(T[:3, :3])
+        # pcd_t.translate(T[:3, 3])
+        pcd_t.transform(depth_to_color).transform(T)
+        frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+        frame_pcd = frame.sample_points_uniformly(number_of_points=1000)
+        
+        pcd_t.points = o3d.utility.Vector3dVector(np.vstack((np.asarray(pcd_t.points), np.asarray(frame_pcd.points))))
+
+        pcd_t.colors = o3d.utility.Vector3dVector(np.vstack((np.asarray(pcd_t.colors), np.asarray(frame_pcd.colors))))
+
+
         combined_pcd += pcd_t
         mesh_t = copy.deepcopy(mesh).transform(T)
         meshes.append(mesh_t)
 
-        color = [0.5, 0, 0]  # RGB, each component should be a float in [0.0, 1.0]
+        # color = [0.5, 0, 0]  # RGB, each component should be a float in [0.0, 1.0]
         # Assign the color to all points
-        pcd_t.colors = o3d.utility.Vector3dVector([color for _ in range(len(pcd_t.points))])
+        # pcd_t.colors = o3d.utility.Vector3dVector([color for _ in range(len(pcd_t.points))])
 
         # o3d.visualization.draw_geometries([pcd_t, pcd, mesh, mesh_t])
-        # o3d.io.write_point_cloud(pcd_dir + f"pcd{i}.pcd", pcd)
-        # o3d.io.write_point_cloud(pcd_dir + f"pcd_t{i}.pcd", pcd_t)
+        # o3d.io.write_point_cloud(pcd_dir + f"pcd{i}.ply", pcd)
+        # o3d.io.write_point_cloud(pcd_dir + f"pcd_t{i}.ply", pcd_t)
     
-    o3d.visualization.draw_geometries([combined_pcd, *meshes])
+    o3d.visualization.draw_geometries([combined_pcd])
     # o3d.io.write_point_cloud(pcd_dir + "combine_pcd.pcd", combined_pcd)
 
 if __name__ == "__main__":

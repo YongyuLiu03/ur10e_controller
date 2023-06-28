@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation as R
 from sensor_msgs.msg import JointState
 import copy
 import tf2_ros
-
+import time
 
 def plan_and_execute(target_pose):
     move_group.set_pose_target(target_pose)
@@ -69,7 +69,6 @@ def main():
 
     plan_and_execute(cur_pose)
     pub.publish(get_transform())
-    rate.sleep()
 
     for i in range(4):
 
@@ -96,7 +95,7 @@ def main():
         
         plan_and_execute(cur_pose)
         pub.publish(get_transform())
-        rate.sleep()
+
 
 
 if __name__ == "__main__":

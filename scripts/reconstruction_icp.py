@@ -8,7 +8,7 @@ import copy
 
 
 def main():
-    count = 8
+    count = 4
     pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 
     voxel_size = 0.0015

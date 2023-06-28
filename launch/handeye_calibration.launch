@@ -1,15 +1,38 @@
 <launch>
 
 
-    <arg name="marker_size" doc="Size of the ArUco marker used, in meters" default="0.096" />
-    <arg name="marker_id" doc="The ID of the ArUco marker used" default="38" />
+    <!-- <arg name="marker_size" doc="Size of the ArUco marker used, in meters" default="0.1" />
+    <arg name="marker_id" doc="The ID of the ArUco marker used" default="42" /> -->
 
+    <arg name="camera_namespace" default="/camera/color" />
+
+    <arg name="marker_size" default="0.015" />
+    <arg name="square_size" default="0.023" />
+    <arg name="square_number_x" default="7" />
+    <arg name="square_number_y" default="9" />
 
     <include file="$(find ur_robot_driver)/launch/ur10e_bringup.launch" />
     <include file="$(find ur10e_moveit_config)/launch/moveit_planning_execution.launch" />
     <include file="$(find realsense2_camera)/launch/rs_camera.launch" />
 
-    <node name="aruco_tracker" pkg="aruco_ros" type="single">
+    <node name="easy_aruco_node" pkg="easy_aruco" type="easy_aruco_node">
+        <param name="object_type" value="charuco_board" />
+
+        <param name="camera_namespace" value="$(arg camera_namespace)" />
+        <param name="dictionary" value="DICT_6X6_250" />
+
+        <param name="camera_frame" value="camera_color_optical_frame" />
+        <param name="reference_frame" value="camera_color_optical_frame" />
+        <remap from="/camera/color/image_rect_color" to="/camera/color/image_raw"/>
+        
+        <param name="marker_size" value="$(arg marker_size)" />
+        <param name="square_size" value="$(arg square_size)" />
+        <param name="square_number_x" value="$(arg square_number_x)" />
+        <param name="square_number_y" value="$(arg square_number_y)" />
+    </node>
+
+
+    <!-- <node name="aruco_tracker" pkg="aruco_ros" type="single">
         <remap from="/camera_info" to="/camera/color/camera_info" />
         <remap from="/image" to="/camera/color/image_raw" />
         <param name="image_is_rectified" value="true"/>
@@ -18,7 +41,7 @@
         <param name="reference_frame"    value="camera_color_optical_frame"/>
         <param name="camera_frame"       value="camera_color_optical_frame"/>
         <param name="marker_frame"       value="camera_marker" />
-    </node>
+    </node> -->
 
     <include file="$(find easy_handeye)/launch/calibrate.launch">
         <arg name="eye_on_hand" value="true"/>
@@ -28,13 +51,13 @@
 
         <!-- fill in the following parameters according to your robot's published tf frames -->
         <arg name="robot_base_frame" value="base_link"/>
-        <arg name="robot_effector_frame" value="printer_link"/>
+        <arg name="robot_effector_frame" value="wrist_3_link"/>
 
         <!-- fill in the following parameters according to your tracking system's published tf frames -->
         <arg name="tracking_base_frame" value="camera_color_optical_frame"/>
-        <arg name="tracking_marker_frame" value="camera_marker"/>
+        <arg name="tracking_marker_frame" value="board"/>
 
+        <arg name="publish_dummy" value="false" />
     </include>
-
 
 </launch>
