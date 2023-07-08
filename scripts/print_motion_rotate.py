@@ -43,7 +43,7 @@ def main():
     init_pose = Pose()
     init_pose.position.x = float(0.5)
     init_pose.position.y = float(0.0)
-    init_pose.position.z = float(0.0)
+    init_pose.position.z = float(-0.3)
     init_r = R.from_rotvec(np.radians(45)*np.array([0, 0, 1]))
     init_quat = init_r.as_quat()
     init_pose.orientation.x = init_quat[0]
@@ -55,15 +55,10 @@ def main():
     fluid_width = 0.003
     surface_step = 11
     filler_step = 9
-    quat_1 = R.from_rotvec(np.radians(45)*np.array([0, 0, 1])).as_quat()
-    quat_2 = R.from_rotvec(np.radians(-135)*np.array([0, 0, 1])).as_quat()
-    rot_90_z = R.from_rotvec(np.radians(-90)*np.array([0, 0, 1]))
-    rot_90_z_counter = R.from_rotvec(np.radians(90)*np.array([0, 0, 1]))
     rot_180_z = R.from_rotvec(np.radians(180)*np.array([0, 0, 1]))
     
 
     cur_pose = init_pose
-    cur_quat = quat_1
     cur_r = init_r
     for i in range(layers):
         print(f"Layer {i}: {cur_pose.position}")

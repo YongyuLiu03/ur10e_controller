@@ -9,6 +9,7 @@ import copy
 from scipy.spatial.transform import Rotation as R
 import tf.transformations as tf
 import tf2_ros
+import matplotlib.pyplot as plt
 
 pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pipeline = rs.pipeline()
@@ -37,6 +38,7 @@ depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
 depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
 if depth_scale < 0.001:
         depth_to_color[:3, 3] *= 10
+        
 print(depth_scale)
 print(depth_to_color)
 
@@ -124,7 +126,33 @@ def main():
         # o3d.io.write_point_cloud(pcd_dir + f"pcd_t{i}.ply", pcd_t)
     
     o3d.visualization.draw_geometries([combined_pcd])
+    # combined_pcd_down1 = combined_pcd.voxel_down_sample(0.0005)
+    # o3d.visualization.draw_geometries([combined_pcd_down1])
     # o3d.io.write_point_cloud(pcd_dir + "combine_pcd.pcd", combined_pcd)
+    # combined_pcd.estimate_normals()
+    # o3d.visualization.draw_geometries([combined_pcd], point_show_normal=True)
+
+    # with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
+    #     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+    #         combined_pcd, depth=9)
+    # o3d.visualization.draw_geometries([mesh])
+    
+    # densities = np.asarray(densities)
+    # density_colors = plt.get_cmap('plasma')(
+    #     (densities - densities.min()) / (densities.max() - densities.min()))
+    # density_colors = density_colors[:, :3]
+    # density_mesh = o3d.geometry.TriangleMesh()
+    # density_mesh.vertices = mesh.vertices
+    # density_mesh.triangles = mesh.triangles
+    # density_mesh.triangle_normals = mesh.triangle_normals
+    # density_mesh.vertex_colors = o3d.utility.Vector3dVector(density_colors)
+    # o3d.visualization.draw_geometries([density_mesh])
+    # vertices_to_remove = densities < np.quantile(densities, 0.01)
+    # mesh.remove_vertices_by_mask(vertices_to_remove)
+    # o3d.visualization.draw_geometries([mesh])
+                                  
+
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+
+    
+    <include file="$(find easy_handeye)/launch/publish.launch">
+        <arg name="eye_on_hand" value="true" />
+        <arg name="namespace_prefix" value="ur10e_calib" />
+    </include>
+
+    <node pkg="tf" type="static_transform_publisher" name="color_to_depth"
+        args="0 0 0 0 0 0 camera_color_optical_frame camera_depth_optical_frame 100" />
+
+</launch>

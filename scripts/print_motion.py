@@ -28,7 +28,7 @@ def plan_and_execute_cartesian(waypoints):
     #     # retry = "e" == input("e to retry / other to skip ")
     #     success = move_group.execute(plan, wait=True)
     #     wait_until_stop()
-        
+    
     return 
 
 class Monitor:

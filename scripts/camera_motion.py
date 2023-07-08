@@ -57,7 +57,7 @@ def main():
     init_pose = Pose()
     init_pose.position.x = float(0.5)
     init_pose.position.y = float(0)
-    init_pose.position.z = float(0.05)
+    init_pose.position.z = float(-0.25)
     length = 0.1
     rate = rospy.Rate(120)
 

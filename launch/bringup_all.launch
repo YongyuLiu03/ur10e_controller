@@ -1,14 +1,13 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <launch>
-
+<!-- 
+    <inlcude file="$(find easy_handeye)/launch/publish.launch"> 
+        <param name="namespace_prefix" value="ur10e_calib"/>
+        <param name="eye_on_hand" value="true" />
+    </inlcude> -->
     <include file="$(find ur_robot_driver)/launch/ur10e_bringup.launch" />
-    <include file="$(find ur10e_moveit_config)/launch/moveit_planning_execution.launch"/>
+    <include file="$(find ur10e_moveit_config)/launch/moveit_planning_execution.launch" />
     <include file="$(find ur10e_moveit_config)/launch/moveit_rviz.launch" />
-    <!-- <include file="$(find easy_handeye)/launch/publish.launch">
-        <arg name="eye_on_hand" value="true" />
-        <arg name="namespace_prefix" value="ur10e_calib" />
-    </include> -->
-    <node pkg="tf" type="static_transform_publisher" name="color_to_depth"
-        args="0 0 0 0 0 0 camera_color_optical_frame camera_depth_optical_frame 100" />
+
 
 </launch>
