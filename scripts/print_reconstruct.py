@@ -13,6 +13,12 @@ import os
 import pyrealsense2 as rs
 import open3d as o3d
 import tf2_ros
+import serial
+import time
+from moveit_msgs.msg import RobotState
+
+arduino = serial.Serial(port='/dev/ttyACM0', baudrate=115200, timeout=.1)
+time.sleep(2)
 
 moveit_commander.roscpp_initialize(sys.argv)
 rospy.init_node("print_reconstruct")
@@ -71,15 +77,18 @@ init_pose.orientation.x = init_quat[0]
 init_pose.orientation.y = init_quat[1]
 init_pose.orientation.z = init_quat[2]
 init_pose.orientation.w = init_quat[3]
-length = 0.15
+length = 0.06
 layers = 11
 fluid_width = 0.003
 surface_step = 11
 filler_step = 9
 rot_180_z = R.from_rotvec(np.radians(180)*np.array([0, 0, 1]))
 
-origin = np.array([init_pose.position.x + length/2, init_pose.position.y + length/2, init_pose.position.z + layers*fluid_width/2])
-
+origin = np.array([init_pose.position.x, init_pose.position.y, init_pose.position.z])
+move_group.set_planning_time(20)
+move_group.set_num_planning_attempts(10)
+plans = []
+rotate_ind = []
 
 
 def plan_and_execute_cartesian(waypoints, eef_step):
@@ -90,8 +99,24 @@ def plan_and_execute_cartesian(waypoints, eef_step):
     success = move_group.execute(plan, wait=True)
     print("Execution result: ", success)
     if not success :
+        arduino.write(bytes('-1', 'utf-8'))
+        time.sleep(0.5)
+        arduino.write(bytes('-1', 'utf-8'))
         exit()
     return 
+
+def plan_cartesian(waypoints, eef_step):
+    if plans:
+        last_point = plans[-1].joint_trajectory.points[-1]
+        robot_state = RobotState()
+        robot_state.joint_state.name = move_group.get_active_joints()
+        robot_state.joint_state.position = last_point.positions
+        move_group.set_start_state(robot_state)
+    fraction = 0
+    while fraction < 0.95:
+        (plan, fraction) = move_group.compute_cartesian_path(waypoints, eef_step, 0.0)
+        print(fraction)
+    return plan 
 
 def get_transform(): 
     transform = None
@@ -135,19 +160,16 @@ def capture_frame():
 
 def main():
 
+    move_group.set_pose_target(init_pose)
+    move_group.go(wait=True)
+    
     combined_pcd = capture_frame()
-    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
-    frame_pcd = frame.sample_points_uniformly(number_of_points=1000)
-    o3d.visualization.draw_geometries([combined_pcd, frame_pcd])
 
     cur_pose = init_pose
     cur_r = init_r
     for i in range(layers):
-        print(f"Layer {i}: {cur_pose.position}")
-
         waypoints = []
         waypoints.append(copy.deepcopy(cur_pose))
-
         if i % 2 == 0:
             cur_pose.position.x += fluid_width
             cur_pose.position.y += fluid_width
@@ -169,7 +191,6 @@ def main():
                         cur_pose.position.y -= length - 2*fluid_width
                     else:
                         cur_pose.position.y += length - 2*fluid_width
-                # print(cur_pose.position)
                 waypoints.append(copy.deepcopy(cur_pose))
                 if j != surface_step-1: 
                     if i % 2 == 0:
@@ -180,7 +201,6 @@ def main():
 
         else:
             print("Printing filler")            
-            # print(cur_pose.position)
             for j in range(filler_step):
                 if i % 2 == 0:
                     if j % 2 == 0:
@@ -195,7 +215,6 @@ def main():
                         cur_pose.position.x += length - 2*fluid_width
                     cur_pose.position.y -=  (length-2*fluid_width)/filler_step
                 waypoints.append(copy.deepcopy(cur_pose))
-                # print(cur_pose.position)
 
         if i % 2 == 0:
             cur_pose.position.x += fluid_width
@@ -204,12 +223,8 @@ def main():
             cur_pose.position.x -= fluid_width
             cur_pose.position.y -= fluid_width
         waypoints.append(copy.deepcopy(cur_pose))
-        # print(cur_pose.position)
-        plan_and_execute_cartesian(waypoints, fluid_width)
-
 
         print("Printing edge")
-        waypoints = []
         for j in range(4):
             if i % 2 != 0:
                 if j == 0:
@@ -230,7 +245,7 @@ def main():
                 elif j == 3:
                     cur_pose.position.y += length       
             waypoints.append(copy.deepcopy(cur_pose))
-        plan_and_execute_cartesian(waypoints, fluid_width)
+        plans.append(plan_cartesian(waypoints, fluid_width))
 
         if i % 3 == 1:
             print("Rotating")
@@ -242,19 +257,33 @@ def main():
             cur_pose.orientation.z = cur_quat[2]
             cur_pose.orientation.w = cur_quat[3]
             waypoints.append(copy.deepcopy(cur_pose))
-
-            combined_pcd += capture_frame()
-            frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
-            frame_pcd = frame.sample_points_uniformly(number_of_points=1000)
-            o3d.visualization.draw_geometries([combined_pcd, frame_pcd])
-
-            plan_and_execute_cartesian(waypoints, 1)
+            plans.append(plan_cartesian(waypoints, 1))
+            rotate_ind.append(len(plans)-1)
 
         cur_pose.position.z += fluid_width
 
 
-    o3d.visualization.draw_geometries([combined_pcd])
-    o3d.io.write_point_cloud(pcd_dir + f"combined_pcd.pcd", combined_pcd)
+    arduino.write(bytes('5000', 'utf-8'))
+    for i in range(len(plans)):
+        if i in rotate_ind:
+            arduino.write(bytes('-1', 'utf-8'))
+            combined_pcd += capture_frame()
+
+        success = move_group.execute(plans[i], wait=True)
+        print("Execution result: ", success)
+        if not success :
+            break
+        
+        if i in rotate_ind:
+            arduino.write(bytes('5000', 'utf-8'))
+
+    arduino.write(bytes('-1', 'utf-8'))
+    time.sleep(0.5)
+    arduino.write(bytes('-1', 'utf-8'))
+    # o3d.visualization.draw_geometries([combined_pcd])
+    # o3d.io.write_point_cloud(pcd_dir + f"combined_pcd.pcd", combined_pcd)
+
+
     
 
 if __name__ == "__main__":

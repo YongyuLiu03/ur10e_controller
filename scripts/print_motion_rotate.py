@@ -35,10 +35,10 @@ def main():
     move_group = moveit_commander.MoveGroupCommander(group_names[0])
     move_group.clear_path_constraints()
 
-    # move_group.set_planning_time(20)
+    move_group.set_planning_time(20)
     # move_group.set_max_velocity_scaling_factor(0.6)
     # move_group.set_max_acceleration_scaling_factor(0.6)
-    # move_group.set_num_planning_attempts(5)
+    move_group.set_num_planning_attempts(10)
     
     init_pose = Pose()
     init_pose.position.x = float(0.5)
@@ -60,10 +60,12 @@ def main():
 
     cur_pose = init_pose
     cur_r = init_r
+    waypoints = []
+
     for i in range(layers):
         print(f"Layer {i}: {cur_pose.position}")
 
-        waypoints = []
+        # waypoints = []
         waypoints.append(copy.deepcopy(cur_pose))
 
         if i % 2 == 0:
@@ -124,11 +126,11 @@ def main():
             cur_pose.position.y -= fluid_width
         waypoints.append(copy.deepcopy(cur_pose))
         # print(cur_pose.position)
-        plan_and_execute_cartesian(waypoints, fluid_width)
+        # plan_and_execute_cartesian(waypoints, fluid_width)
 
 
         print("Printing edge")
-        waypoints = []
+        # waypoints = []
         for j in range(4):
             if i % 2 != 0:
                 if j == 0:
@@ -149,10 +151,10 @@ def main():
                 elif j == 3:
                     cur_pose.position.y += length       
             waypoints.append(copy.deepcopy(cur_pose))
-        plan_and_execute_cartesian(waypoints, fluid_width)
+        # plan_and_execute_cartesian(waypoints, fluid_width)
 
-        if i % 2 == 1 and i != layers-1:
-            waypoints = []
+        if i % 3 == 1:
+            # waypoints = []
             cur_r = rot_180_z * cur_r
             cur_quat = cur_r.as_quat()
             cur_pose.orientation.x = cur_quat[0]
@@ -161,10 +163,14 @@ def main():
             cur_pose.orientation.w = cur_quat[3]
             waypoints.append(copy.deepcopy(cur_pose))
 
-            plan_and_execute_cartesian(waypoints, 1)
+
+            # plan_and_execute_cartesian(waypoints, 1)
 
         cur_pose.position.z += fluid_width
 
+
+    # print(waypoints)
+    plan_and_execute_cartesian(waypoints, fluid_width)
 
 if __name__ == "__main__":
     main()
