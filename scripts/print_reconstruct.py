@@ -16,12 +16,14 @@ import tf2_ros
 import serial
 import time
 from moveit_msgs.msg import RobotState
+from std_msgs.msg import Float64
 
-arduino = serial.Serial(port='/dev/ttyACM0', baudrate=115200, timeout=.1)
+# arduino = serial.Serial(port='/dev/ttyACM0', baudrate=115200, timeout=.1)
 time.sleep(2)
 
 moveit_commander.roscpp_initialize(sys.argv)
 rospy.init_node("print_reconstruct")
+pub = rospy.Publisher('height', Float64, queue_size=10)
 
 global move_group
 global tfBuffer
@@ -35,37 +37,37 @@ move_group.clear_path_constraints()
 tfBuffer = tf2_ros.Buffer()
 listener = tf2_ros.TransformListener(tfBuffer)
 
-pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
-pipeline = rs.pipeline()
-config = rs.config()
-config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, 848, 480, rs.format.rgb8, 30)
-profile = pipeline.start(config)
-depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
-pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
-    o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-pinhole_camera_intrinsic.set_intrinsics(
-    intrinsics.width, intrinsics.height, intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy
-)
-o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/camera_intrinsics.json"), pinhole_camera_intrinsic)
+# pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
+# pipeline = rs.pipeline()
+# config = rs.config()
+# config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
+# config.enable_stream(rs.stream.color, 848, 480, rs.format.rgb8, 30)
+# profile = pipeline.start(config)
+# depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
+# intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+# pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
+#     o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+# pinhole_camera_intrinsic.set_intrinsics(
+#     intrinsics.width, intrinsics.height, intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy
+# )
+# o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/camera_intrinsics.json"), pinhole_camera_intrinsic)
 
-align_to = rs.stream.color
-align = rs.align(align_to)
+# align_to = rs.stream.color
+# align = rs.align(align_to)
 
-depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
-color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
-extrinsics = depth_profile.get_extrinsics_to(color_profile)
-depth_to_color = np.eye(4)
-depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
-depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
-if depth_scale < 0.001:
-        depth_to_color[:3, 3] *= 10
+# depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
+# color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
+# extrinsics = depth_profile.get_extrinsics_to(color_profile)
+# depth_to_color = np.eye(4)
+# depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
+# depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
+# if depth_scale < 0.001:
+#         depth_to_color[:3, 3] *= 10
         
-print(depth_scale)
-print(depth_to_color)
-clip_distance_in_meters = 0.5
-clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
+# print(depth_scale)
+# print(depth_to_color)
+# clip_distance_in_meters = 0.5
+# clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
 
 init_pose = Pose()
 init_pose.position.x = float(0.5)
@@ -99,9 +101,9 @@ def plan_and_execute_cartesian(waypoints, eef_step):
     success = move_group.execute(plan, wait=True)
     print("Execution result: ", success)
     if not success :
-        arduino.write(bytes('-1', 'utf-8'))
-        time.sleep(0.5)
-        arduino.write(bytes('-1', 'utf-8'))
+        # arduino.write(bytes('-1', 'utf-8'))
+        # time.sleep(0.5)
+        # arduino.write(bytes('-1', 'utf-8'))
         exit()
     return 
 
@@ -118,52 +120,52 @@ def plan_cartesian(waypoints, eef_step):
         print(fraction)
     return plan 
 
-def get_transform(): 
-    transform = None
-    rate = rospy.Rate(10.0)
-    while not transform:
-        try:
-            transform = tfBuffer.lookup_transform('base_link', 'camera_color_optical_frame', rospy.Time())
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            rate.sleep()
-            continue
+# def get_transform(): 
+#     transform = None
+#     rate = rospy.Rate(10.0)
+#     while not transform:
+#         try:
+#             transform = tfBuffer.lookup_transform('base_link', 'camera_color_optical_frame', rospy.Time())
+#         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+#             rate.sleep()
+#             continue
 
-    return transform.transform
+#     return transform.transform
 
-def capture_frame():
-    transform = get_transform()
-    frame = align.process(pipeline.wait_for_frames())
-    depth_frame = frame.get_depth_frame()
-    color_frame = frame.get_color_frame()
-    q = transform.rotation
-    r = R.from_quat([q.x, q.y, q.z, q.w])
-    matrix = r.as_matrix()
-    t = transform.translation
-    translation = np.array([t.x, t.y, t.z])
-    if depth_scale < 0.001:
-        translation *= 10
-    T = np.eye(4)
-    T[:3, :3] = matrix
-    T[:3, 3] = translation
-    print(T)
-    depth_image = np.asanyarray(depth_frame.get_data())
-    color_image = np.asanyarray(color_frame.get_data())
-    depth_image[depth_image > clip_distance_in_depth_units] = 0
-    depth_o3d = o3d.geometry.Image(depth_image)
-    color_o3d = o3d.geometry.Image(color_image)
-    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
-    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
+# def capture_frame():
+#     transform = get_transform()
+#     frame = align.process(pipeline.wait_for_frames())
+#     depth_frame = frame.get_depth_frame()
+#     color_frame = frame.get_color_frame()
+#     q = transform.rotation
+#     r = R.from_quat([q.x, q.y, q.z, q.w])
+#     matrix = r.as_matrix()
+#     t = transform.translation
+#     translation = np.array([t.x, t.y, t.z])
+#     if depth_scale < 0.001:
+#         translation *= 10
+#     T = np.eye(4)
+#     T[:3, :3] = matrix
+#     T[:3, 3] = translation
+#     print(T)
+#     depth_image = np.asanyarray(depth_frame.get_data())
+#     color_image = np.asanyarray(color_frame.get_data())
+#     depth_image[depth_image > clip_distance_in_depth_units] = 0
+#     depth_o3d = o3d.geometry.Image(depth_image)
+#     color_o3d = o3d.geometry.Image(color_image)
+#     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
+#     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
     
-    pcd_t = copy.deepcopy(pcd)
-    pcd_t.transform(depth_to_color).transform(T).translate(-origin)
-    return pcd_t
+#     pcd_t = copy.deepcopy(pcd)
+#     pcd_t.transform(depth_to_color).transform(T).translate(-origin)
+#     return pcd_t
 
 def main():
 
     move_group.set_pose_target(init_pose)
     move_group.go(wait=True)
     
-    combined_pcd = capture_frame()
+    # combined_pcd = capture_frame()
 
     cur_pose = init_pose
     cur_r = init_r
@@ -263,23 +265,28 @@ def main():
         cur_pose.position.z += fluid_width
 
 
-    arduino.write(bytes('5000', 'utf-8'))
+    # arduino.write(bytes('5000', 'utf-8'))
+    height = 0
     for i in range(len(plans)):
         if i in rotate_ind:
-            arduino.write(bytes('-1', 'utf-8'))
-            combined_pcd += capture_frame()
+            # arduino.write(bytes('-1', 'utf-8'))
+            # combined_pcd += capture_frame()
+            success = move_group.execute(plans[i], wait=True)
+            print("Execution result: ", success)
+            if not success :
+                break
+            # arduino.write(bytes('5000', 'utf-8'))
+        else:
+            success = move_group.execute(plans[i], wait=True)
+            print("Execution result: ", success)
+            if not success :
+                break
+            height += fluid_width
+            pub.publish(height)
 
-        success = move_group.execute(plans[i], wait=True)
-        print("Execution result: ", success)
-        if not success :
-            break
-        
-        if i in rotate_ind:
-            arduino.write(bytes('5000', 'utf-8'))
-
-    arduino.write(bytes('-1', 'utf-8'))
-    time.sleep(0.5)
-    arduino.write(bytes('-1', 'utf-8'))
+    # arduino.write(bytes('-1', 'utf-8'))
+    # time.sleep(0.5)
+    # arduino.write(bytes('-1', 'utf-8'))
     # o3d.visualization.draw_geometries([combined_pcd])
     # o3d.io.write_point_cloud(pcd_dir + f"combined_pcd.pcd", combined_pcd)
 

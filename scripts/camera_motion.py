@@ -133,48 +133,50 @@ def main():
     
     cur_r = init_r
     cur_pose = init_pose
-    cur_pose.position.y += 0.5*length
+    # cur_pose.position.y += 0.5*length
     plan_and_execute(cur_pose)
+    time.sleep(0.5)
     combined_pcd = capture_frame()
     points = [copy.deepcopy(cur_pose.position)]
-    for i in range(3):
-        cur_r = rot_z_90 * cur_r
-        cur_quat = cur_r.as_quat()
-        if i == 0:
-            cur_pose.position.y -= 0.5*length
-            cur_pose.position.x += 0.5*length
-        elif i == 1:
-            cur_pose.position.y += 0.5*length
-            cur_pose.position.x += 0.5*length
-        elif i == 2:
-            cur_pose.position.x -= 0.5*length
-            cur_pose.position.y += 0.5*length
-        elif i == 3:
-            cur_pose.position.x -= 0.5*length
-            cur_pose.position.y -= 0.5*length
-        cur_pose.orientation.x = cur_quat[0]
-        cur_pose.orientation.y = cur_quat[1]
-        cur_pose.orientation.z = cur_quat[2]
-        cur_pose.orientation.w = cur_quat[3]
+    # for i in range(3):
+    #     cur_r = rot_z_90 * cur_r
+    #     cur_quat = cur_r.as_quat()
+    #     if i == 0:
+    #         cur_pose.position.y -= 0.5*length
+    #         cur_pose.position.x += 0.5*length
+    #     elif i == 1:
+    #         cur_pose.position.y += 0.5*length
+    #         cur_pose.position.x += 0.5*length
+    #     elif i == 2:
+    #         cur_pose.position.x -= 0.5*length
+    #         cur_pose.position.y += 0.5*length
+    #     elif i == 3:
+    #         cur_pose.position.x -= 0.5*length
+    #         cur_pose.position.y -= 0.5*length
+    #     cur_pose.orientation.x = cur_quat[0]
+    #     cur_pose.orientation.y = cur_quat[1]
+    #     cur_pose.orientation.z = cur_quat[2]
+    #     cur_pose.orientation.w = cur_quat[3]
 
-        plan_and_execute(cur_pose)
-        combined_pcd += capture_frame()
-        points.append(copy.deepcopy(cur_pose.position))
+    #     plan_and_execute(cur_pose)
+    #     combined_pcd += capture_frame()
+    #     points.append(copy.deepcopy(cur_pose.position))
         
 
 
     frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
     frame_pcd = frame.sample_points_uniformly(number_of_points=1000)
-    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
-    sphere.paint_uniform_color((0, 0, 1))
-    origin_mesh = copy.deepcopy(sphere).translate(origin)
+    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
+    sphere.paint_uniform_color((1, 0, 0))
+    origin_mesh = copy.deepcopy(sphere).translate(origin if depth_scale >= 0.001 else 10*origin)
     point_meshes = [origin_mesh]
-    for i in range(len(points)):
-        p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
+    # for i in range(len(points)):
+    #     p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
         
-        point_meshes.append(p)
+    #     point_meshes.append(p)
 
-    combined_pcd.translate(-origin)
+    # combined_pcd.translate(-origin)
+    # combined_pcd.paint_uniform_color((0, 1, 0))
     o3d.visualization.draw_geometries([frame_pcd, combined_pcd, *point_meshes])
     o3d.io.write_point_cloud(pcd_dir + "pcd.pcd", combined_pcd)
 

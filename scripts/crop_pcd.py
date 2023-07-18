@@ -32,6 +32,7 @@ def remove_hidden_points(pcd):
     pt_map_aggregated = list(set(pt_map_aggregated))
     return pt_map_aggregated
 
+
 pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pcd = o3d.io.read_point_cloud(pcd_dir + "pcd.pcd")
 

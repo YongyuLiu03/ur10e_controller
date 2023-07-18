@@ -9,9 +9,10 @@ import numpy as np
 from geometry_msgs.msg import Pose
 from scipy.spatial.transform import Rotation as R
 import copy
+from std_msgs.msg import Float64
 
-global tfBuffer
-global listener
+# global tfBuffer
+# global listener
 
 rospy.init_node("realtime")
 
@@ -47,7 +48,7 @@ if depth_scale < 0.001:
         
 print(depth_scale)
 print(depth_to_color)
-clip_distance_in_meters = 0.5
+clip_distance_in_meters = 0.3
 clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
 
 init_pose = Pose()
@@ -68,9 +69,21 @@ bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-2*fluid_width, -
                                         max_bound=np.array([length+fluid_width, length+fluid_width, height+fluid_width]))
 
 bbox.color = (0, 0, 1)
-
+if depth_scale < 0.001:
+    bbox.scale(10.0, (0, 0, 0))
 
 origin = np.array([init_pose.position.x, init_pose.position.y, init_pose.position.z])
+
+
+height = None
+new_height = False
+def callback(data):
+    global height
+    global new_height
+    height = data.data
+    new_height = True
+    print("new_height:", height)
+
 
 def get_transform(): 
     transform = None
@@ -99,7 +112,7 @@ def capture_frame():
     T = np.eye(4)
     T[:3, :3] = matrix
     T[:3, 3] = translation
-    print(T)
+    # print(T)
     depth_image = np.asanyarray(depth_frame.get_data())
     color_image = np.asanyarray(color_frame.get_data())
     depth_image[depth_image > clip_distance_in_depth_units] = 0
@@ -109,9 +122,9 @@ def capture_frame():
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
     
     pcd_t = copy.deepcopy(pcd)
-    pcd_t.transform(depth_to_color).transform(T).translate(origin)
-    pcd_t = pcd_t.crop(bbox)
-    return pcd_t
+    pcd_t.transform(depth_to_color).transform(T).translate(-origin if depth_scale >= 0.001 else -10*origin)
+    # pcd_t = pcd_t.crop(bbox)
+    return T, pcd_t
 
 def get_camera_position(radius, azimuth, elevation):
     x = radius * np.sin(elevation) * np.cos(azimuth)
@@ -136,24 +149,94 @@ def remove_hidden_points(pcd):
     pt_map_aggregated = list(set(pt_map_aggregated))
     return pt_map_aggregated
 
-vis = o3d.visualization.Visualizer()
-vis.create_window()
-vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame())
 pcd = o3d.geometry.PointCloud()
+prev_T, new_pcd = capture_frame()
+# new_pcd = new_pcd.crop(bbox)
+cl, ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.4)
+outliers = new_pcd.select_by_index(ind, invert=True)
+outliers.paint_uniform_color([1, 0, 0])
+inliers = new_pcd.select_by_index(ind)
+pcd += inliers
+# pcd += outliers
+box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, fluid_width)
+if depth_scale < 0.001:
+    box_mesh= o3d.geometry.TriangleMesh.create_box(10*length, 10*length, 10*fluid_width)
+vertices = np.asarray(box_mesh.vertices)
+triangles = np.asarray(box_mesh.triangles)
+bottom = []
+for i in range(len(triangles)):
+    if (vertices[triangles[i]][:, 2]==0).all():
+        bottom.append(i)
+triangles = np.delete(triangles, bottom, 0)
+box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(pcd.points))
+# o3d.visualization.draw_geometries([pcd])
 
-while True:
-    pcd += capture_frame()  
-    pt_map = remove_hidden_points(pcd)
-    # pcd_visible = pcd.select_by_index(pt_map)
-    # pcd_visible.paint_uniform_color([0, 0, 1])
-    # pcd_hidden = pcd.select_by_index(pt_map, invert=True)
-    # pcd_hidden.paint_uniform_color([1, 0, 0])    
-    pcd = pcd.select_by_index(pt_map)
-    vis.update_geometry(pcd)
-    vis.poll_events()
+vis = o3d.visualization.Visualizer()
+vis.create_window(height=480, width=640)
+# vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame())
+vis.add_geometry(box_pcd)
+
+vis.add_geometry(pcd)
+vis.add_geometry(bbox)
+# vis.update_geometry(pcd)
+
+# o3d.visualization.draw_geometries([pcd])
+
+pub = rospy.Subscriber("height", Float64, callback)
+
+
+dt = 3
+
+# prev_T = np.eye(4)
+
+previous_t = time.time()
+keep_running = True
+while keep_running:
+    
+    if time.time() - previous_t > dt:
+        s = time.time()
+        new_T, new_pcd = capture_frame()
+        # new_pcd = new_pcd.crop(bbox)
+
+        if len(new_pcd.points) > 0 and not np.allclose(prev_T, new_T, rtol=1e-1):
+            print("adding a frame, prev_t: \n", prev_T, "\nnew_t\n", new_T)
+            cl, ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.4)
+            outliers = new_pcd.select_by_index(ind, invert=True)
+            outliers.paint_uniform_color([1, 0, 0])
+            inliers = new_pcd.select_by_index(ind)
+            pcd += inliers
+            # pcd += outliers
+            # pt_map = remove_hidden_points(pcd)
+            # pcd_visible = pcd.select_by_index(pt_map)
+            # pcd_visible.paint_uniform_color([0, 0, 1])
+            # pcd_hidden = pcd.select_by_index(pt_map, invert=True)
+            # pcd_hidden.paint_uniform_color([1, 0, 0])    
+            # pcd = pcd.select_by_index(pt_map)
+            vis.update_geometry(pcd)
+            print(time.time()-s)
+            previous_t = time.time()
+            prev_T = new_T
+        
+        if new_height:
+            vis.remove_geometry(box_pcd, reset_bounding_box=False)
+            box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, height)
+            if depth_scale < 0.001:
+                box_mesh= o3d.geometry.TriangleMesh.create_box(10*length, 10*length, 10*height)
+            vertices = np.asarray(box_mesh.vertices)
+            triangles = np.asarray(box_mesh.triangles)
+            bottom = []
+            for i in range(len(triangles)):
+                if (vertices[triangles[i]][:, 2]==0).all():
+                    bottom.append(i)
+            triangles = np.delete(triangles, bottom, 0)
+            box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+            box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(pcd.points))
+            vis.add_geometry(box_pcd, reset_bounding_box=False)
+            new_height = False
+            
+    keep_running = vis.poll_events()
     vis.update_renderer()
     
-    time.sleep(1) 
-
-
+vis.destroy_window()
 
