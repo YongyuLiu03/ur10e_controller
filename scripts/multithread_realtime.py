@@ -10,8 +10,14 @@ from geometry_msgs.msg import Pose
 from scipy.spatial.transform import Rotation as R
 import copy
 from std_msgs.msg import Float64
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+import multiprocessing
+
+# global tfBuffer
+# global listener
+
+
+
+
 
 
 rospy.init_node("realtime")
@@ -61,12 +67,12 @@ init_pose.orientation.x = init_quat[0]
 init_pose.orientation.y = init_quat[1]
 init_pose.orientation.z = init_quat[2]
 init_pose.orientation.w = init_quat[3]
-length = 0.065
+length = 0.06
 fluid_width = 0.003
 layers = 11
-height = 0.044
+height = 0.045
 bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-2*fluid_width, -2*fluid_width, -fluid_width]), 
-                                        max_bound=np.array([length+2*fluid_width, length+2*fluid_width, height+2*fluid_width]))
+                                        max_bound=np.array([length+fluid_width, length+fluid_width, height+fluid_width]))
 
 bbox.color = (0, 0, 1)
 if depth_scale < 0.001:
@@ -149,9 +155,40 @@ def remove_hidden_points(pcd):
     pt_map_aggregated = list(set(pt_map_aggregated))
     return pt_map_aggregated
 
+def preprocess(input_queue, output_queue):
+    while True:
+        _pcd = input_queue.get()
+        if _pcd is None:
+            break
+        print("processing pcd")
+        pcd = _pcd.create_pcd()
+        pcd = pcd.crop(bbox)
+        # cl, r_ind = pcd.remove_radius_outlier(nb_points=200, radius=0.1)
+        # pcd = pcd.select_by_index(r_ind)
+        # cl, s_ind = pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=2.0)
+        # pcd = pcd.select_by_index(s_ind)
+        # # pcd += outliers
+        # pt_map = remove_hidden_points(pcd)
+        # pcd = pcd.select_by_index(pt_map)
+        output_queue.put(_PointCloudTransmissionFormat(pcd))
+        print("add")
+
+class _PointCloudTransmissionFormat:
+    def __init__(self, pcd):
+        self.points = np.array(pcd.points)
+        self.colors = np.array(pcd.colors)
+        self.normals = np.array(pcd.normals)
+
+    def create_pcd(self):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(self.points)
+        pcd.colors = o3d.utility.Vector3dVector(self.colors)
+        pcd.normals = o3d.utility.Vector3dVector(self.normals)
+        return pcd
+
 pcd = o3d.geometry.PointCloud()
 prev_T, new_pcd = capture_frame()
-new_pcd = new_pcd.crop(bbox)
+# new_pcd = new_pcd.crop(bbox)
 cl, ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.4)
 outliers = new_pcd.select_by_index(ind, invert=True)
 outliers.paint_uniform_color([1, 0, 0])
@@ -183,37 +220,41 @@ vis.add_geometry(bbox)
 
 # o3d.visualization.draw_geometries([pcd])
 
+
+input_queue = multiprocessing.Queue()
+output_queue = multiprocessing.Queue()
+
+process = multiprocessing.Process(target=preprocess, args=(input_queue, output_queue))
+process.start()
+
 pub = rospy.Subscriber("height", Float64, callback)
 
-
-dt = 2
+dt = 3
 
 # prev_T = np.eye(4)
 
 previous_t = time.time()
 keep_running = True
-update_defect = [False, False]
 while keep_running:
     
     if time.time() - previous_t > dt:
         s = time.time()
         new_T, new_pcd = capture_frame()
-        new_pcd = new_pcd.crop(bbox)
+        # new_pcd = new_pcd.crop(bbox)
 
         if len(new_pcd.points) > 0 and not np.allclose(prev_T, new_T, rtol=1e-1):
             print("adding a frame, prev_t: \n", prev_T, "\nnew_t\n", new_T)
-            # cl, r_ind = new_pcd.remove_radius_outlier(nb_points=200, radius=0.1)
-            # new_pcd = new_pcd.select_by_index(r_ind)
-            cl, s_ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.5)
-            new_pcd = new_pcd.select_by_index(s_ind)
-            # pcd += outliers
-            pcd += new_pcd
-            vis.update_geometry(pcd)
-            print(time.time()-s)
             previous_t = time.time()
             prev_T = new_T
-            update_defect[0] = True
-        
+            input_queue.put(_PointCloudTransmissionFormat(new_pcd))
+
+        if not output_queue.empty():
+            _pcd = output_queue.get()
+            new_pcd = _pcd.create_pcd()
+            pcd += new_pcd
+            print("updating pcd")
+            vis.update_geometry(pcd)
+
         if new_height:
             vis.remove_geometry(box_pcd, reset_bounding_box=False)
             box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, height)
@@ -230,45 +271,11 @@ while keep_running:
             box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(pcd.points))
             vis.add_geometry(box_pcd, reset_bounding_box=False)
             new_height = False
-            update_defect[1] = True
-        
-        if all(update_defect):
-            print("update defect")
-
-            vis.remove_geometry(box_pcd, reset_bounding_box=False)
-            pt_map = remove_hidden_points(pcd)
-            n_pcd = pcd.select_by_index(pt_map)
-            box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(n_pcd.points))
-            vis.add_geometry(box_pcd, reset_bounding_box=False)
-            update_defect = [False, False]
-            box_bound = o3d.geometry.AxisAlignedBoundingBox(min_bound=[0, 0, 0], max_bound=[length, length, height])
-            in_box_ind = box_bound.get_point_indices_within_bounding_box(n_pcd.points)
-            distances = box_pcd.compute_point_cloud_distance(n_pcd)
-            distances = np.asanyarray(distances)
-            distances[in_box_ind] *= -1
-            threshold = 0.0025
-            outliers = (np.abs(distances) > threshold).nonzero()
-            noise_threshold = 0.005
-            noise = (np.abs(distances) > noise_threshold).nonzero()
-            # distances[noise] = 0.0
-            norm_distances = (distances - distances.min()) / (distances.max() - distances.min())
-            cmap = plt.get_cmap("seismic")
-            cmap_colors = cmap(norm_distances)[:, :3]
-            colors = np.asarray(n_pcd.colors)
-            colors[outliers] = cmap_colors[outliers]
-            n_pcd.colors = o3d.utility.Vector3dVector(colors)
-            vis.add_geometry(n_pcd, reset_bounding_box=False)
-            vis.remove_geometry(pcd, reset_bounding_box=False)
-            vis.remove_geometry(box_pcd, reset_bounding_box=False)
-            pcd = n_pcd
-
-            print("done updating defect")
-
-
-
             
     keep_running = vis.poll_events()
     vis.update_renderer()
-    
+
+input_queue.put(None)
+process.join()
 vis.destroy_window()
 

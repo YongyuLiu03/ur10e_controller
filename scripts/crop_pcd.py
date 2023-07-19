@@ -35,6 +35,7 @@ def remove_hidden_points(pcd):
 
 pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
 pcd = o3d.io.read_point_cloud(pcd_dir + "pcd.pcd")
+# pcd.scale(0.1, (0, 0, 0))
 
 length = 0.065
 layers = 11
@@ -60,9 +61,9 @@ box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
 bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-2*fluid_width, -2*fluid_width, -fluid_width]), 
                                            max_bound=np.array([length+fluid_width, length+fluid_width, height+fluid_width]))
-
-# o3d.visualization.draw_geometries([pcd, bbox, frame_pcd, box_mesh])
 bbox.color = (0, 0, 1)
+
+o3d.visualization.draw_geometries([pcd, bbox, frame_pcd, box_mesh])
 pcd = pcd.crop(bbox)
 
 # pt_map = remove_hidden_points(pcd)
@@ -94,7 +95,7 @@ distances = box_pcd.compute_point_cloud_distance(pcd)
 distances = np.asanyarray(distances)
 distances[in_box_ind] *= -1
 
-threshold = 0.002
+threshold = 0.003
 outliers = (np.abs(distances) > threshold).nonzero()
 print(distances.min())
 print(distances.max())
