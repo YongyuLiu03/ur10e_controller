@@ -43,8 +43,6 @@ extrinsics = depth_profile.get_extrinsics_to(color_profile)
 depth_to_color = np.eye(4)
 depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
 depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
-if depth_scale < 0.001:
-        depth_to_color[:3, 3] *= 10
         
 print(depth_scale)
 print(depth_to_color)
@@ -120,7 +118,6 @@ def capture_frame():
     color_o3d = o3d.geometry.Image(color_image)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
-    
     pcd_t = copy.deepcopy(pcd)
     pcd_t.transform(depth_to_color).transform(T).translate(-origin if depth_scale >= 0.001 else -10*origin)
     # pcd_t = pcd_t.crop(bbox)
@@ -151,32 +148,18 @@ def remove_hidden_points(pcd):
 
 pcd = o3d.geometry.PointCloud()
 prev_T, new_pcd = capture_frame()
-new_pcd = new_pcd.crop(bbox)
+# new_pcd = new_pcd.crop(bbox)
 cl, ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.4)
 outliers = new_pcd.select_by_index(ind, invert=True)
 outliers.paint_uniform_color([1, 0, 0])
 inliers = new_pcd.select_by_index(ind)
 pcd += inliers
 # pcd += outliers
-box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, fluid_width)
-if depth_scale < 0.001:
-    box_mesh= o3d.geometry.TriangleMesh.create_box(10*length, 10*length, 10*fluid_width)
-vertices = np.asarray(box_mesh.vertices)
-triangles = np.asarray(box_mesh.triangles)
-bottom = []
-for i in range(len(triangles)):
-    if (vertices[triangles[i]][:, 2]==0).all():
-        bottom.append(i)
-triangles = np.delete(triangles, bottom, 0)
-box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
-box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(pcd.points))
 # o3d.visualization.draw_geometries([pcd])
 
 vis = o3d.visualization.Visualizer()
 vis.create_window(height=480, width=640)
-# vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame())
-vis.add_geometry(box_pcd)
-
+vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size= 0.1))
 vis.add_geometry(pcd)
 vis.add_geometry(bbox)
 # vis.update_geometry(pcd)
@@ -193,15 +176,16 @@ dt = 2
 previous_t = time.time()
 keep_running = True
 update_defect = [False, False]
+box_mesh = None
 while keep_running:
     
     if time.time() - previous_t > dt:
         s = time.time()
         new_T, new_pcd = capture_frame()
-        new_pcd = new_pcd.crop(bbox)
+        # new_pcd = new_pcd.crop(bbox)
 
         if len(new_pcd.points) > 0 and not np.allclose(prev_T, new_T, rtol=1e-1):
-            print("adding a frame, prev_t: \n", prev_T, "\nnew_t\n", new_T)
+            print("adding a frame\n", new_T)
             # cl, r_ind = new_pcd.remove_radius_outlier(nb_points=200, radius=0.1)
             # new_pcd = new_pcd.select_by_index(r_ind)
             cl, s_ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.5)
@@ -215,10 +199,11 @@ while keep_running:
             update_defect[0] = True
         
         if new_height:
-            vis.remove_geometry(box_pcd, reset_bounding_box=False)
+            if box_mesh:
+                vis.remove_geometry(box_lineset, reset_bounding_box=False)
             box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, height)
             if depth_scale < 0.001:
-                box_mesh= o3d.geometry.TriangleMesh.create_box(10*length, 10*length, 10*height)
+                box_mesh.scale(10.0, (0, 0, 0))
             vertices = np.asarray(box_mesh.vertices)
             triangles = np.asarray(box_mesh.triangles)
             bottom = []
@@ -227,19 +212,16 @@ while keep_running:
                     bottom.append(i)
             triangles = np.delete(triangles, bottom, 0)
             box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
-            box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(pcd.points))
-            vis.add_geometry(box_pcd, reset_bounding_box=False)
+            box_lineset = o3d.geometry.LineSet.create_from_triangle_mesh(box_mesh)
+            vis.add_geometry(box_lineset, reset_bounding_box=False)
             new_height = False
             update_defect[1] = True
         
         if all(update_defect):
             print("update defect")
-
-            vis.remove_geometry(box_pcd, reset_bounding_box=False)
             pt_map = remove_hidden_points(pcd)
             n_pcd = pcd.select_by_index(pt_map)
             box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(n_pcd.points))
-            vis.add_geometry(box_pcd, reset_bounding_box=False)
             update_defect = [False, False]
             box_bound = o3d.geometry.AxisAlignedBoundingBox(min_bound=[0, 0, 0], max_bound=[length, length, height])
             in_box_ind = box_bound.get_point_indices_within_bounding_box(n_pcd.points)
@@ -259,9 +241,8 @@ while keep_running:
             n_pcd.colors = o3d.utility.Vector3dVector(colors)
             vis.add_geometry(n_pcd, reset_bounding_box=False)
             vis.remove_geometry(pcd, reset_bounding_box=False)
-            vis.remove_geometry(box_pcd, reset_bounding_box=False)
-            pcd = n_pcd
-
+            # vis.remove_geometry(box_pcd, reset_bounding_box=False)
+            # pcd = n_pcd
             print("done updating defect")
 
 

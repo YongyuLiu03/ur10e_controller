@@ -162,7 +162,7 @@ def main():
     cur_pose.position.y += 0.5*length
     plan_and_execute(cur_pose)
     time.sleep(0.5)
-    # combined_pcd = denoise(capture_frame())
+    # combined_pcd = capture_frame()
 
     points = [copy.deepcopy(cur_pose.position)]
     for i in range(3):
@@ -196,15 +196,15 @@ def main():
     # sphere.paint_uniform_color((1, 0, 0))
     # origin_mesh = copy.deepcopy(sphere).translate(origin if depth_scale >= 0.001 else 10*origin)
     # point_meshes = [origin_mesh]
-    # # for i in range(len(points)):
-    # #     p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
+    # for i in range(len(points)):
+    #     p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
         
-    # #     point_meshes.append(p)
+    #     point_meshes.append(p)
 
     # # combined_pcd.translate(-origin)
     # # combined_pcd.paint_uniform_color((0, 1, 0))
     # o3d.visualization.draw_geometries([frame, combined_pcd, *point_meshes])
-    # o3d.io.write_point_cloud(pcd_dir + "pcd.pcd", combined_pcd)
+    # # o3d.io.write_point_cloud(pcd_dir + "pcd.pcd", combined_pcd)
 
 if __name__ == "__main__":
     main()

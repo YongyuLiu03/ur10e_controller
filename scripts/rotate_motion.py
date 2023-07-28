@@ -156,7 +156,7 @@ def main():
     move_group.set_pose_target(init_pose)
     move_group.go(wait=True)
     
-    # combined_pcd = capture_frame()
+    combined_pcd = capture_frame()
 
     cur_pose = init_pose
     cur_r = init_r
@@ -175,7 +175,7 @@ def main():
 
     combined_pcd += capture_frame()
 
-    o3d.visualization.draw_geometries([combined_pcd])
+    o3d.visualization.draw_geometries([combined_pcd, o3d.geometry.TriangleMesh.create_coordinate_frame()])
     o3d.io.write_point_cloud(pcd_dir + f"combined_pcd.pcd", combined_pcd)
 
 
