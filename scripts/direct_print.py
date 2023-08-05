@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# print with calculated paths stored in ur10e_controller/plans
+# will initialize position of robot first, then enter to exxecute plans
 import rospy
 import moveit_commander
 from geometry_msgs.msg import Pose
@@ -12,8 +14,10 @@ import time
 from std_msgs.msg import Float64
 import pickle
 
+# uncomment arduino part to control printhead motor in this program
 # arduino = serial.Serial(port='/dev/ttyACM0', baudrate=115200, timeout=.1)
 time.sleep(2)
+# modify this
 printhead_delay = 800
 
 moveit_commander.roscpp_initialize(sys.argv)
@@ -57,6 +61,7 @@ def main():
 
     plan_and_execute_cartesian([init_pose], 10*fluid_width)
 
+    # modify this
     plans_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../plans/", "plan.pickle")
     with open(plans_dir, 'rb') as file:
         plans, rotate_ind = pickle.load(file)

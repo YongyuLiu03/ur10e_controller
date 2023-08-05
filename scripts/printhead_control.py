@@ -1,4 +1,5 @@
 #!/usr/bin/env python3 
+# manual control printhead motor, lower input -> higher rotate speed
 import serial
 import time
 
@@ -9,4 +10,3 @@ while(1):
     x = input()
     arduino.write(bytes(x, 'utf-8'))
     time.sleep(0.5)
-# arduino.write(bytes(str(3000), 'utf-8')) 

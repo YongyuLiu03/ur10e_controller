@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# compute and store plans to print a cubic, enter in terminal to execute plans
 import rospy
 import moveit_commander
 from geometry_msgs.msg import Pose, Point

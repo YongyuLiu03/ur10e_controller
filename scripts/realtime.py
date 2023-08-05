@@ -136,8 +136,8 @@ def remove_hidden_points(pcd):
     # print(diameter)
     radius = diameter * 100
     
-    for azimuth in np.linspace(0, 2*np.pi, num=10):     # Rotate around the object
-        for elevation in np.linspace(0, np.pi/2, num=5):  # From top to bottom
+    for azimuth in np.linspace(0, 2*np.pi, num=10):     
+        for elevation in np.linspace(0, np.pi/2, num=5):  
             camera = get_camera_position(diameter, azimuth, elevation)
             _, pt_map = pcd.hidden_point_removal(camera, radius)    
             pt_map_aggregated += pt_map

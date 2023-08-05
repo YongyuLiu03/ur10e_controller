@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# make camera rotate around the object and capture frame from four directions, use it to verify hand-eye calibration result and printer_link position in ur_macro.xacro
 import rospy
 import moveit_commander
 from geometry_msgs.msg import Pose, PoseStamped, TransformStamped
@@ -33,37 +34,37 @@ move_group.set_num_planning_attempts(10)
 tfBuffer = tf2_ros.Buffer()
 listener = tf2_ros.TransformListener(tfBuffer)
 
-# pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
-# pipeline = rs.pipeline()
-# config = rs.config()
-# config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
-# config.enable_stream(rs.stream.color, 848, 480, rs.format.rgb8, 30)
-# profile = pipeline.start(config)
-# depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-# intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
-# pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
-#     o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-# pinhole_camera_intrinsic.set_intrinsics(
-#     intrinsics.width, intrinsics.height, intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy
-# )
-# o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/camera_intrinsics.json"), pinhole_camera_intrinsic)
+pcd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../pcd/")
+pipeline = rs.pipeline()
+config = rs.config()
+config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
+config.enable_stream(rs.stream.color, 848, 480, rs.format.rgb8, 30)
+profile = pipeline.start(config)
+depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
+intrinsics = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(
+    o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+pinhole_camera_intrinsic.set_intrinsics(
+    intrinsics.width, intrinsics.height, intrinsics.fx, intrinsics.fy, intrinsics.ppx, intrinsics.ppy
+)
+o3d.io.write_pinhole_camera_intrinsic(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/camera_intrinsics.json"), pinhole_camera_intrinsic)
 
-# align_to = rs.stream.color
-# align = rs.align(align_to)
+align_to = rs.stream.color
+align = rs.align(align_to)
 
-# depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
-# color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
-# extrinsics = depth_profile.get_extrinsics_to(color_profile)
-# depth_to_color = np.eye(4)
-# depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
-# depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
-# if depth_scale < 0.001:
-#         depth_to_color[:3, 3] *= 10
+depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
+color_profile = rs.video_stream_profile(profile.get_stream(rs.stream.color))
+extrinsics = depth_profile.get_extrinsics_to(color_profile)
+depth_to_color = np.eye(4)
+depth_to_color[:3, :3] = np.array(extrinsics.rotation).reshape(3, 3)
+depth_to_color[:3, 3] = np.array(extrinsics.translation).reshape(3)
+if depth_scale < 0.001:
+        depth_to_color[:3, 3] *= 10
         
-# print(depth_scale)
-# print(depth_to_color)
-# clip_distance_in_meters = 0.5
-# clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
+print(depth_scale)
+print(depth_to_color)
+clip_distance_in_meters = 0.5
+clip_distance_in_depth_units = int(clip_distance_in_meters / depth_scale)
 
 init_pose = Pose()
 init_pose.position.x = float(0.5)
@@ -81,11 +82,6 @@ origin = np.array([0.5, 0.0, -0.3])
 
 rot_z_90 = R.from_rotvec(np.radians(90)*np.array([0, 0, 1]))
 
-# bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-0.01, -0.01, -0.01]), 
-#                                            max_bound=np.array([0.08, 0.08, 0.05]))
-# if depth_scale < 0.001:
-#     bbox.scale(10.0, (0, 0, 0))
-# bbox.color = (0, 0, 1)
 
 def plan_and_execute(target_pose):
     move_group.set_pose_target(target_pose)
@@ -130,14 +126,13 @@ def capture_frame():
     color_o3d = o3d.geometry.Image(color_image)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
-    
+    if depth_scale < 0.001:
+        pcd.scale(0.1, (0, 0, 0))
     pcd_t = copy.deepcopy(pcd)
-    pcd_t.transform(depth_to_color).transform(T).translate(-origin if depth_scale >= 0.001 else -10*origin)
+    pcd_t.transform(depth_to_color).transform(T).translate(-origin)
     return pcd_t
 
 def denoise(pcd):
-    o3d.visualization.draw_geometries([pcd, bbox, o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=(0, 0, 0))])
-    pcd = pcd.crop(bbox)
 
     cl, r_ind = pcd.remove_radius_outlier(nb_points=200, radius=0.1)
     r_inlier = pcd.select_by_index(r_ind)
@@ -162,7 +157,7 @@ def main():
     cur_pose.position.y += 0.5*length
     plan_and_execute(cur_pose)
     time.sleep(0.5)
-    # combined_pcd = capture_frame()
+    combined_pcd = capture_frame()
 
     points = [copy.deepcopy(cur_pose.position)]
     for i in range(3):
@@ -186,25 +181,23 @@ def main():
         cur_pose.orientation.w = cur_quat[3]
 
         plan_and_execute(cur_pose)
-        # combined_pcd += denoise(capture_frame())
-        # points.append(copy.deepcopy(cur_pose.position))
+        combined_pcd += denoise(capture_frame())
+        points.append(copy.deepcopy(cur_pose.position))
         
 
 
-    # frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
-    # sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
-    # sphere.paint_uniform_color((1, 0, 0))
-    # origin_mesh = copy.deepcopy(sphere).translate(origin if depth_scale >= 0.001 else 10*origin)
-    # point_meshes = [origin_mesh]
-    # for i in range(len(points)):
-    #     p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
+    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
+    sphere.paint_uniform_color((1, 0, 0))
+    origin_mesh = copy.deepcopy(sphere).translate(origin)
+    point_meshes = [origin_mesh]
+    for i in range(len(points)):
+        p = copy.deepcopy(sphere).translate([points[i].x, points[i].y, points[i].z])
         
-    #     point_meshes.append(p)
+        point_meshes.append(p)
 
-    # # combined_pcd.translate(-origin)
-    # # combined_pcd.paint_uniform_color((0, 1, 0))
-    # o3d.visualization.draw_geometries([frame, combined_pcd, *point_meshes])
-    # # o3d.io.write_point_cloud(pcd_dir + "pcd.pcd", combined_pcd)
+    o3d.visualization.draw_geometries([frame, combined_pcd, *point_meshes])
+    # o3d.io.write_point_cloud(pcd_dir + "pcd.pcd", combined_pcd)
 
 if __name__ == "__main__":
     main()

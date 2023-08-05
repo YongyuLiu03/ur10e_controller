@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
+# print basic information of robot, simply make robot eef move to a given point
 import rospy
 import moveit_commander
-import moveit_msgs.msg
 import geometry_msgs.msg
 import sys
 from scipy.spatial.transform import Rotation as R
