@@ -67,8 +67,8 @@ bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-2*fluid_width, -
                                         max_bound=np.array([length+2*fluid_width, length+2*fluid_width, height+2*fluid_width]))
 
 bbox.color = (0, 0, 1)
-if depth_scale < 0.001:
-    bbox.scale(10.0, (0, 0, 0))
+# if depth_scale < 0.001:
+#     bbox.scale(10.0, (0, 0, 0))
 
 origin = np.array([init_pose.position.x, init_pose.position.y, init_pose.position.z])
 
@@ -105,8 +105,8 @@ def capture_frame():
     matrix = r.as_matrix()
     t = transform.translation
     translation = np.array([t.x, t.y, t.z])
-    if depth_scale < 0.001:
-        translation *= 10
+    # if depth_scale < 0.001:
+    #     translation *= 10
     T = np.eye(4)
     T[:3, :3] = matrix
     T[:3, 3] = translation
@@ -118,8 +118,10 @@ def capture_frame():
     color_o3d = o3d.geometry.Image(color_image)
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_o3d, depth_o3d)
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, pinhole_camera_intrinsic)
+    if depth_scale < 0.001:
+        pcd.scale(0.1, (0, 0, 0))
     pcd_t = copy.deepcopy(pcd)
-    pcd_t.transform(depth_to_color).transform(T).translate(-origin if depth_scale >= 0.001 else -10*origin)
+    pcd_t.transform(depth_to_color).transform(T).translate(-origin)
     # pcd_t = pcd_t.crop(bbox)
     return T, pcd_t
 
@@ -202,8 +204,8 @@ while keep_running:
             if box_mesh:
                 vis.remove_geometry(box_lineset, reset_bounding_box=False)
             box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, height)
-            if depth_scale < 0.001:
-                box_mesh.scale(10.0, (0, 0, 0))
+            # if depth_scale < 0.001:
+            #     box_mesh.scale(10.0, (0, 0, 0))
             vertices = np.asarray(box_mesh.vertices)
             triangles = np.asarray(box_mesh.triangles)
             bottom = []
@@ -225,6 +227,8 @@ while keep_running:
             update_defect = [False, False]
             box_bound = o3d.geometry.AxisAlignedBoundingBox(min_bound=[0, 0, 0], max_bound=[length, length, height])
             in_box_ind = box_bound.get_point_indices_within_bounding_box(n_pcd.points)
+
+
             distances = box_pcd.compute_point_cloud_distance(n_pcd)
             distances = np.asanyarray(distances)
             distances[in_box_ind] *= -1
@@ -234,6 +238,8 @@ while keep_running:
             noise = (np.abs(distances) > noise_threshold).nonzero()
             # distances[noise] = 0.0
             norm_distances = (distances - distances.min()) / (distances.max() - distances.min())
+
+
             cmap = plt.get_cmap("seismic")
             cmap_colors = cmap(norm_distances)[:, :3]
             colors = np.asarray(n_pcd.colors)

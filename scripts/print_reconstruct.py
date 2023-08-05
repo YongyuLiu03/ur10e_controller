@@ -48,19 +48,6 @@ constraints.joint_constraints.append(constraint)
 
 move_group.set_path_constraints(constraints)
 
-pc = PositionConstraint()
-pc.header.frame_id = "base_link"
-pc.link_name = "printer_link"
-pc.target_point_offset.x = 0
-pc.target_point_offset.y = 0
-pc.target_point_offset.z = 0
-# pc.constraint_region.primitives[0].type = pc.constraint_region.primitives[0].BOX
-# pc.constraint_region.primitives[0].dimensions = [0.01, 0.01, 0.01]
-pc.weight = 1.0
-
-constraints = Constraints()
-constraints.position_constraints.append(pc)
-
 
 init_pose = Pose()
 init_pose.position.x = float(0.5)
