@@ -10,7 +10,7 @@ Authur: [Yongyu Liu](https://github.com/YongyuLiu03)  [yl8126@nyu.edu](mailto:yl
 
 _For more information, check official repository [Universal_Robots_ROS_Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)_
 
-1. Ensure that the computer has enabled real-time capablities, run `uname -a` and find `PREEMPT_RT`. This is necessary for stable connection. 
+1. Ensure that the computer has enabled real-time capablities, run `uname -a` and find `PREEMPT_RT`. __This is necessary for stable connection.__
 
    ![Screenshot from 2023-08-05 16-01-16](https://github.com/YongyuLiu03/ur10e_controller/assets/83950768/d319fa49-3c1b-4eb0-904a-56a6516fa3e7)
 
@@ -67,6 +67,22 @@ _For more information, check [easy_handeye](https://github.com/IFL-CAMP/easy_han
 4. Run `rosrun ur10e_controller print_reconstruct.py`, the robot will compute and store plans for printing a cubic, then waits input in terminal to execute the plans.
 
    Or run `rosrun ur10e_controller direct_print.py`, which loads pre-computed plans and execute them.
+
+5. Run `python3 scripts/printhead_control.py` to manually control the printhead motor, or uncomment arduino lines in `print_reconstruct.py` or `direct_print.py` for automatic control and the motor will be stopped when the robot is rotating.
+
+## Troubleshoot
+
+__Do not__ mess with camera's calibration. You can try More -> Calibration Data -> Restore Factory in Intel RealSense Viewer SDK, but __do not__ try other self-calibration methods in SDK unless you have a good reason and are familiar with depth camera calibration. This may result in wrong hand-eye calibration result and erroneous point cloud reconstruction.
+
+For scripts that contain processing point clouds, check the variable `depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()`. Due to unknown hardware issues, the value of depth_scale is either 9.999999747378752e-05 or 0.0010000000474974513. Although they refer to the same length unit, the point cloud will be scaled incorrectly when `depth_scale < 0.001`. The solution is to scale the point cloud down by 0.1 once it is created from rgbd image, e.g. in [realtime.py](https://github.com/YongyuLiu03/ur10e_controller/blob/2a371789d94ba79f7d897c28c006ca2252fdcb7c/scripts/realtime.py#L121). 
+
+For this specific project, use my modified version of these packages instead of the original ones in the catkin workspace: [universal_robot](https://github.com/YongyuLiu03/universal_robot), [Universal_Robots_ROS_Driver](https://github.com/YongyuLiu03/Universal_Robots_ROS_Driver), [realsense-ros](https://github.com/YongyuLiu03/realsense-ros). 
+
+The position of `printer_link` defined in `catkin_ws/src/universal_robot/ur_description/urdf/inc/ur_macro.xacro` may not be accurate and requires manual adjustment. To do this, move the robot's end effector, which is set to be printer_link, to a position. Capture and visualize a frame in Open3D with the printer attached to the robot. In the window, also include a point indicating the goal position. Compare and adjust the translations in `ur_macro.xacro` accordingly, so that the printer's tip and the target point align. This step is necessary because the point cloud comparison relies grealy on the alignment of the printed object and the ideal model.
+
+Due to the unsteadiness of camera holder, tape the camera firmly to the holder before starting the experiment, and recalibrate anytime you feel necessary. 
+
+If the IK solution of robot shown in RViz distorts greatly resulting in collision during movement, the most effetive way is to examine and modify joint degree constraints in `catkin_ws/src/universal_robot/ur_description/config/ur10e/joint_limits.yaml`.
 
 ## References
 - [Open3D](http://www.open3d.org/)
