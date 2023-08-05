@@ -60,6 +60,17 @@ _For more information, check [easy_handeye](https://github.com/IFL-CAMP/easy_han
    
   ![Screenshot from 2023-08-05 16-41-47](https://github.com/YongyuLiu03/ur10e_controller/assets/83950768/ca5cd6a9-c6a4-4f54-813f-a6e8a14f1494)
 
-3. Run `rosrun ur10e_controller realtime.py`, a window displaying real-time point clouds will pop up.
+3. Run `rosrun ur10e_controller realtime.py`, a window displaying real-time point clouds after denoise and reconstruction will pop up.
 
-4. 
+   Whenever a message is published in the topic `/height`, by printing program or via terminal, e.g. `rostopic pub /height std_msgs/Float64 0.04`, the window will make a comparison between current scene and model cropped in z-axis by corresponding height.
+   
+4. Run `rosrun ur10e_controller print_reconstruct.py`, the robot will compute and store plans for printing a cubic, then waits input in terminal to execute the plans.
+
+   Or run `rosrun ur10e_controller direct_print.py`, which loads pre-computed plans and execute them.
+
+## References
+- [Open3D](http://www.open3d.org/)
+- [IntelRealSense](https://github.com/IntelRealSense)
+- [easy_handeye](https://github.com/IFL-CAMP/easy_handeye)
+- [Universal_Robots_ROS_Driver](https://github.com/UniversalRobots/Universal_Robots_ROS_Driver)
+- [universal_robot](https://github.com/ros-industrial/universal_robot)
