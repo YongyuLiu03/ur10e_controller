@@ -12,6 +12,7 @@ import copy
 from std_msgs.msg import Float64
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import trimesh
 
 
 rospy.init_node("realtime")
@@ -63,12 +64,10 @@ length = 0.065
 fluid_width = 0.003
 layers = 11
 height = 0.044
-bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=np.array([-2*fluid_width, -2*fluid_width, -fluid_width]), 
-                                        max_bound=np.array([length+2*fluid_width, length+2*fluid_width, height+2*fluid_width]))
+bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-fluid_width, -fluid_width, -fluid_width), 
+                                        max_bound=(length+fluid_width, length+fluid_width, height+fluid_width))
 
 bbox.color = (0, 0, 1)
-# if depth_scale < 0.001:
-#     bbox.scale(10.0, (0, 0, 0))
 
 origin = np.array([init_pose.position.x, init_pose.position.y, init_pose.position.z])
 
@@ -105,8 +104,6 @@ def capture_frame():
     matrix = r.as_matrix()
     t = transform.translation
     translation = np.array([t.x, t.y, t.z])
-    # if depth_scale < 0.001:
-    #     translation *= 10
     T = np.eye(4)
     T[:3, :3] = matrix
     T[:3, 3] = translation
@@ -122,7 +119,7 @@ def capture_frame():
         pcd.scale(0.1, (0, 0, 0))
     pcd_t = copy.deepcopy(pcd)
     pcd_t.transform(depth_to_color).transform(T).translate(-origin)
-    # pcd_t = pcd_t.crop(bbox)
+    pcd_t = pcd_t.crop(bbox)
     return T, pcd_t
 
 def get_camera_position(radius, azimuth, elevation):
@@ -135,7 +132,6 @@ def remove_hidden_points(pcd):
     pt_map_aggregated = []
     view_counter = 1
     diameter = np.linalg.norm(np.asarray(pcd.get_max_bound()) - np.asarray(pcd.get_min_bound()))
-    # print(diameter)
     radius = diameter * 100
     
     for azimuth in np.linspace(0, 2*np.pi, num=10):     
@@ -148,53 +144,60 @@ def remove_hidden_points(pcd):
     pt_map_aggregated = list(set(pt_map_aggregated))
     return pt_map_aggregated
 
+
+model = trimesh.load_mesh(pcd_dir + "box.stl")
+vertices = np.asarray(model.vertices)
+triangles = np.asarray(model.faces)
+bottom = []
+for i in range(len(triangles)):
+    if (vertices[triangles[i]][:, 2]==0).all():
+        bottom.append(i)
+triangles = np.delete(triangles, bottom, 0)
+mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
+normal = [0, 0, -1]
+
+
 pcd = o3d.geometry.PointCloud()
 prev_T, new_pcd = capture_frame()
-# new_pcd = new_pcd.crop(bbox)
 cl, ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.4)
 outliers = new_pcd.select_by_index(ind, invert=True)
 outliers.paint_uniform_color([1, 0, 0])
 inliers = new_pcd.select_by_index(ind)
 pcd += inliers
-# pcd += outliers
-# o3d.visualization.draw_geometries([pcd])
 
 vis = o3d.visualization.Visualizer()
 vis.create_window(height=480, width=640)
 vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size= 0.1))
 vis.add_geometry(pcd)
 vis.add_geometry(bbox)
-# vis.update_geometry(pcd)
-
-# o3d.visualization.draw_geometries([pcd])
 
 pub = rospy.Subscriber("height", Float64, callback)
 
 
 dt = 2
 
-# prev_T = np.eye(4)
-
 previous_t = time.time()
 keep_running = True
 update_defect = [False, False]
 box_mesh = None
+color_pcd = None
+pcd_removed = False
 while keep_running:
     
     if time.time() - previous_t > dt:
         s = time.time()
         new_T, new_pcd = capture_frame()
-        # new_pcd = new_pcd.crop(bbox)
 
         if len(new_pcd.points) > 0 and not np.allclose(prev_T, new_T, rtol=1e-1):
             print("adding a frame\n", new_T)
-            # cl, r_ind = new_pcd.remove_radius_outlier(nb_points=200, radius=0.1)
-            # new_pcd = new_pcd.select_by_index(r_ind)
             cl, s_ind = new_pcd.remove_statistical_outlier(nb_neighbors=500, std_ratio=0.5)
             new_pcd = new_pcd.select_by_index(s_ind)
-            # pcd += outliers
             pcd += new_pcd
-            vis.update_geometry(pcd)
+            if not pcd_removed:
+                vis.update_geometry(pcd)
+            else:
+                vis.add_geometry(pcd, reset_bounding_box=False)
+                pcd_removed = False
             print(time.time()-s)
             previous_t = time.time()
             prev_T = new_T
@@ -203,17 +206,11 @@ while keep_running:
         if new_height:
             if box_mesh:
                 vis.remove_geometry(box_lineset, reset_bounding_box=False)
-            box_mesh = o3d.geometry.TriangleMesh.create_box(length, length, height)
-            # if depth_scale < 0.001:
-            #     box_mesh.scale(10.0, (0, 0, 0))
-            vertices = np.asarray(box_mesh.vertices)
-            triangles = np.asarray(box_mesh.triangles)
-            bottom = []
-            for i in range(len(triangles)):
-                if (vertices[triangles[i]][:, 2]==0).all():
-                    bottom.append(i)
-            triangles = np.delete(triangles, bottom, 0)
-            box_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+            point = [0, 0, height]
+            sliced = trimesh.intersections.slice_mesh_plane(mesh, normal, point)
+            box_mesh = o3d.geometry.TriangleMesh()
+            box_mesh.vertices = o3d.utility.Vector3dVector(np.array(sliced.vertices))
+            box_mesh.triangles = o3d.utility.Vector3iVector(np.array(sliced.faces))
             box_lineset = o3d.geometry.LineSet.create_from_triangle_mesh(box_mesh)
             vis.add_geometry(box_lineset, reset_bounding_box=False)
             new_height = False
@@ -225,30 +222,65 @@ while keep_running:
             n_pcd = pcd.select_by_index(pt_map)
             box_pcd = box_mesh.sample_points_uniformly(number_of_points=len(n_pcd.points))
             update_defect = [False, False]
-            box_bound = o3d.geometry.AxisAlignedBoundingBox(min_bound=[0, 0, 0], max_bound=[length, length, height])
-            in_box_ind = box_bound.get_point_indices_within_bounding_box(n_pcd.points)
+            # box_bound = o3d.geometry.AxisAlignedBoundingBox(min_bound=[0, 0, 0], max_bound=[length, length, height])
+            # in_box_ind = box_bound.get_point_indices_within_bounding_box(n_pcd.points)
 
-
-            distances = box_pcd.compute_point_cloud_distance(n_pcd)
-            distances = np.asanyarray(distances)
-            distances[in_box_ind] *= -1
             threshold = 0.0025
-            outliers = (np.abs(distances) > threshold).nonzero()
             noise_threshold = 0.005
-            noise = (np.abs(distances) > noise_threshold).nonzero()
-            # distances[noise] = 0.0
-            norm_distances = (distances - distances.min()) / (distances.max() - distances.min())
-
-
             cmap = plt.get_cmap("seismic")
-            cmap_colors = cmap(norm_distances)[:, :3]
-            colors = np.asarray(n_pcd.colors)
-            colors[outliers] = cmap_colors[outliers]
-            n_pcd.colors = o3d.utility.Vector3dVector(colors)
-            vis.add_geometry(n_pcd, reset_bounding_box=False)
+            
+            # Method 1: Compare by layers
+
+            if color_pcd:
+                vis.remove_geometry(color_pcd, reset_bounding_box=False)
+
+            color_pcd = o3d.geometry.PointCloud()
+            z_range = np.arange(0, height, fluid_width)
+            for z in z_range:
+                slice_box = o3d.geometry.AxisAlignedBoundingBox(min_bound=[-float("inf"), -float("inf"), z], max_bound=[float("inf"), float("inf"), z+fluid_width])
+                slice_pcd = n_pcd.crop(slice_box)
+                if len(slice_pcd.points) <= 0:
+                    continue
+                in_box_ind = np.where(model.contains(np.asanyarray(slice_pcd.points)))[0]
+                slice_box = trimesh.intersections.slice_mesh_plane(trimesh.intersections.slice_mesh_plane(mesh, [0, 0, 1], [0, 0, z]), [0, 0, -1], [0, 0, z+fluid_width])
+                slice_mesh = o3d.geometry.TriangleMesh()
+                slice_mesh.vertices = o3d.utility.Vector3dVector(np.array(slice_box.vertices))
+                slice_mesh.triangles = o3d.utility.Vector3iVector(np.array(slice_box.faces))
+                slice_box_pcd = slice_mesh.sample_points_uniformly(number_of_points=len(slice_pcd.points))
+                distances = slice_box_pcd.compute_point_cloud_distance(slice_pcd)
+                distances = np.asanyarray(distances)
+                distances[in_box_ind] *= -1
+                outliers = (np.abs(distances) > threshold).nonzero()
+                noise = (np.abs(distances) > noise_threshold).nonzero()
+                distances[noise] = 0.0
+                norm_distances = (distances - distances.min()) / (distances.max() - distances.min())
+                cmap_colors = cmap(norm_distances)[:, :3]
+                colors = np.asarray(slice_pcd.colors)
+                colors[outliers] = cmap_colors[outliers]
+                slice_pcd.colors = o3d.utility.Vector3dVector(colors)
+                color_pcd += slice_pcd
+
+            vis.add_geometry(color_pcd, reset_bounding_box=False)
+
+            # Method 2: Compare as a whole
+            # distances = box_pcd.compute_point_cloud_distance(n_pcd)
+            # distances = np.asanyarray(distances)
+            # distances[in_box_ind] *= -1
+            # outliers = (np.abs(distances) > threshold).nonzero()
+            # noise = (np.abs(distances) > noise_threshold).nonzero()
+            # # distances[noise] = 0.0
+            # norm_distances = (distances - distances.min()) / (distances.max() - distances.min())
+
+            # cmap = plt.get_cmap("seismic")
+            # cmap_colors = cmap(norm_distances)[:, :3]
+            # colors = np.asarray(n_pcd.colors)
+            # colors[outliers] = cmap_colors[outliers]
+            # n_pcd.colors = o3d.utility.Vector3dVector(colors)
+            # vis.add_geometry(n_pcd, reset_bounding_box=False)
+
             vis.remove_geometry(pcd, reset_bounding_box=False)
-            # vis.remove_geometry(box_pcd, reset_bounding_box=False)
-            # pcd = n_pcd
+            pcd_removed = True
+            pcd = n_pcd
             print("done updating defect")
 
 
