@@ -76,6 +76,16 @@ __Do not__ mess with camera's calibration. You can try More -> Calibration Data 
 
 For scripts that contain processing point clouds, check the variable `depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()`. Due to unknown hardware issues, the value of depth_scale is either 9.999999747378752e-05 or 0.0010000000474974513. Although they refer to the same length unit, the point cloud will be scaled incorrectly when `depth_scale < 0.001`. The solution is to scale the point cloud down by 0.1 once it is created from rgbd image, e.g. in [realtime.py](https://github.com/YongyuLiu03/ur10e_controller/blob/2a371789d94ba79f7d897c28c006ca2252fdcb7c/scripts/realtime.py#L121). 
 
+If the error `Cannot open /dev/ttyACM0: Permission denied` occurs when connecting to the arduino board, run `sudo chmod a+rw /dev/ttyACM0` and retry.
+
+There are parameters to be tuned: 
+   - Print: `length`, `height`, `fluid_width`, `layers`
+   - Capture frame rate: `dt`
+   - Denoise: `bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-fluid_width, -fluid_width, -fluid_width), 
+                                                          max_bound=(length+fluid_width, length+fluid_width, height+fluid_width))`,
+              `pcd.remove_statistical_outliers(nb_neighbors, std_ratio)`, `pcd.remove_radius_outliers(nb_points, radius)`
+   - Compare: `threshold`, `noise_threshold`
+
 For this specific project, use my modified version of these packages instead of the original ones in the catkin workspace: [universal_robot](https://github.com/YongyuLiu03/universal_robot), [Universal_Robots_ROS_Driver](https://github.com/YongyuLiu03/Universal_Robots_ROS_Driver), [realsense-ros](https://github.com/YongyuLiu03/realsense-ros). 
 
 The position of `printer_link` defined in `catkin_ws/src/universal_robot/ur_description/urdf/inc/ur_macro.xacro` may not be accurate and requires manual adjustment. To do this, move the robot's end effector, which is set to be printer_link, to a position. Capture and visualize a frame in Open3D with the printer attached to the robot. In the window, also include a point indicating the goal position. Compare and adjust the translations in `ur_macro.xacro` accordingly, so that the printer's tip and the target point align. This step is necessary because the point cloud comparison relies grealy on the alignment of the printed object and the ideal model.
