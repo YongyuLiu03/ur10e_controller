@@ -2,7 +2,7 @@
 
 Robot control, realtime reconstruction, and defect detection for AI4CE lab M3DP project.
 
-Authur: [Yongyu Liu](https://github.com/YongyuLiu03)  [yl8126@nyu.edu](mailto:yl8126nyu.edu)
+Author: [Yongyu Liu](https://github.com/YongyuLiu03)  [yl8126@nyu.edu](mailto:yl8126nyu.edu)
 
 # Tutorial
 
